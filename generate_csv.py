@@ -11,7 +11,7 @@ def get_entries(directory):
     entries = []
     for f in files:
         try:
-            entries.append((f,librosa.get_duration(f)))
+            entries.append((directory, f, librosa.get_duration(f)))
         except:
             raise
     return entries
@@ -24,7 +24,7 @@ def main():
         all_entries += get_entries(dir_name)
     with open("out.csv", "w") as csvfile:
         writer = csv.writer(csvfile)
-        writer.writerow(["location", "duration"])
+        writer.writerow(["class", "location", "duration"])
         writer.writerows(all_entries)
 
 if __name__ == "__main__":
