@@ -2,18 +2,20 @@ import glob
 import csv
 import librosa
 import sys
+import os
 
 
-endings = "[m4a|opus|wav|mp3]"
+endings = ["m4a", "opus", "wav", "mp3"]
 
 def get_entries(directory):
-    files = glob.glob(f"./{directory}/*.{endings}")
     entries = []
-    for f in files:
-        try:
-            entries.append((directory, f, librosa.get_duration(f)))
-        except:
-            raise
+    for end in endings:
+        files = glob.glob(os.path.join(directory, f"*.{end}"))
+        for f in files:
+            try:
+                entries.append((directory, f, librosa(f)))
+            except:
+                raise
     return entries
 
 
