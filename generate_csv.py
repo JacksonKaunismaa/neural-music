@@ -11,9 +11,11 @@ def get_entries(directory):
     entries = []
     for end in endings:
         files = glob.glob(os.path.join(directory, f"*.{end}"))
+        print(files, end)
         for f in files:
+            sr = librosa.get_samplerate(f)
             try:
-                entries.append((directory, f, librosa(f)))
+                entries.append((directory, f, librosa.get_duration(filename=f), sr))
             except:
                 raise
     return entries
