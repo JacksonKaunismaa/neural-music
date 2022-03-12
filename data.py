@@ -37,4 +37,4 @@ class MusicDataset(Dataset):
         path = self.annotations[idx,1]
         frames = np.array([librosa.load(path, offset=t, duration=self.win_sz, sr=self.sr)[0]
                            for t in range(0,length,self.win_sz)])
-        return frames
+        return frames[:,:-1], frames[:,1:], self.annotations[idx,0]  #x, y, cond
