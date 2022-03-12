@@ -3,13 +3,13 @@ import data
 import tqdm
 import torch
 #import torch.nn as nn
-import matplotlib
+#import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 #import numpy.random as npr
 from torch.autograd import Variable
-import pylab
+#import pylab
 
 np.random.seed(36) # to ensure consistency of train-test split
 
@@ -66,19 +66,21 @@ def train(network, tr_data, va_data):
             va_loss += batch_loss
         valid_loss_list.append(va_loss)
         print(va_loss)
-        
-    pylab.plot(train_loss_list,label = "Train Loss", color= "red")
-    pylab.plot(valid_loss_list,label = "Valid Loss", color = "blue")
-    pylab.xlabel("Iterations")
-    pylab.ylabel("Losses")
-    pylab.title("Training and Validation Losses")
-    pylab.legend()
+
+    plt.plot(train_loss_list,label="Train Loss", color="red")
+    plt.plot(valid_loss_list,label="Valid Loss", color="blue")
+    plt.xlabel("Iterations")
+    plt.ylabel("Losses")
+    plt.title("Training and Validation Losses")
+    plt.legend()
 
 
 df = pd.read_csv("out.csv")
+df["classes"] = data.encode_classes(df["classes"])
 size = len(df)
 all_indices = np.arange(size)
 np.random.shuffle(all_indices)
+df = np.array(df)
 
 params = (STFT_WIN_SIZE, SR, STFT_WIN_SIZE, STFT_HOP_SIZE, NUM_MELS)
 
