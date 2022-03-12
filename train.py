@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 #import numpy.random as npr
 from torch.autograd import Variable
+import pylab
 
 np.random.seed(36) # to ensure consistency of train-test split
 
@@ -65,6 +66,13 @@ def train(network, tr_data, va_data):
             va_loss += batch_loss
         valid_loss_list.append(va_loss)
         print(va_loss)
+        
+    pylab.plot(train_loss_list,label = "Train Loss", color= "red")
+    pylab.plot(valid_loss_list,label = "Valid Loss", color = "blue")
+    pylab.xlabel("Iterations")
+    pylab.ylabel("Losses")
+    pylab.title("Training and Validation Losses")
+    pylab.legend()
 
 
 df = pd.read_csv("out.csv")
@@ -80,3 +88,12 @@ te_dataset = data.MusicDataset(df[all_indices][int(size*TRAIN_SIZE+VALID_SIZE):]
 
 network = model.MelNet(DIMS, N_LAYERS, 2, data.num_mels, data.time_steps, DIRECTIONS)
 train(network, tr_dataset, va_dataset)
+
+
+
+
+
+
+
+
+
