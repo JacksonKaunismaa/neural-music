@@ -1,6 +1,6 @@
 import model
 import data
-import tqdm
+from tqdm import tqdm
 import torch
 #import torch.nn as nn
 #import matplotlib
@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 #import numpy.random as npr
 from torch.autograd import Variable
+from torch.utils.data import DataLoader
 #import pylab
 
 np.random.seed(36) # to ensure consistency of train-test split
@@ -23,7 +24,7 @@ TRAIN_SIZE = 0.8
 VALID_SIZE = 0.1
 
 # Data hyperparameters
-WIN_SIZE = 6 # num seconds
+WIN_SIZE = 10 # num seconds
 SR = 22050  # sample rate
 STFT_WIN_SIZE = 256
 STFT_HOP_SIZE = 512
@@ -51,8 +52,9 @@ def train(network, tr_data, va_data):
     valid_loss_list = []
     for epoch in tqdm(range(EPOCHS)):
         for x,y,cond in tr_data:
+            print(x.shape)
             optimizer.zero_grad()
-            noise = torch.normal(size=(x.shape[0],1,1))
+            noise = torch.normal(mean=torch.zeros(x.shape[0],1,1))
             pred_params = network(x, cond, noise)
             batch_loss = loss_fn(pred_params, y)
             batch_loss.backward()
@@ -76,26 +78,24 @@ def train(network, tr_data, va_data):
 
 
 df = pd.read_csv("out.csv")
-df["classes"] = data.encode_classes(df["classes"])
+df["class"] = data.encode_classes(df["class"])
 size = len(df)
 all_indices = np.arange(size)
 np.random.shuffle(all_indices)
 df = np.array(df)
 
-params = (STFT_WIN_SIZE, SR, STFT_WIN_SIZE, STFT_HOP_SIZE, NUM_MELS)
+params = (WIN_SIZE, SR, STFT_WIN_SIZE, STFT_HOP_SIZE, NUM_MELS)
 
 tr_dataset = data.MusicDataset(df[all_indices][:int(size*TRAIN_SIZE)], *params)
 va_dataset = data.MusicDataset(df[all_indices][int(size*TRAIN_SIZE):int(size*(TRAIN_SIZE+VALID_SIZE))], *params)
 te_dataset = data.MusicDataset(df[all_indices][int(size*TRAIN_SIZE+VALID_SIZE):], *params)
+#elem = tr_dataset[1]
+#print([e.shape for e in elem[:-1]], elem[-1])
+#print(tr_dataset.num_mels, tr_dataset.time_steps)
+#quit()
+tr_load = DataLoader(tr_dataset, batch_size=None, batch_sampler=None, shuffle=False, num_workers=0)
+va_load = DataLoader(va_dataset, batch_size=None, batch_sampler=None, shuffle=False, num_workers=0)
+te_load = DataLoader(te_dataset, batch_size=None, batch_sampler=None, shuffle=False, num_workers=0)
 
-network = model.MelNet(DIMS, N_LAYERS, 2, data.num_mels, data.time_steps, DIRECTIONS)
-train(network, tr_dataset, va_dataset)
-
-
-
-
-
-
-
-
-
+network = model.MelNet(DIMS, N_LAYERS, 2, tr_dataset.num_mels, tr_dataset.time_steps, DIRECTIONS)
+train(network, tr_load, va_load)

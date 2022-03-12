@@ -12,12 +12,12 @@ def encode_classes(classes):
     return [class_map[name] for name in classes]
 
 class MusicDataset(Dataset):
-    def __init__(self, annotations, win_size, sr, win_length, hop_length, n_mels):
+    def __init__(self, annotations, sample_size, sr, win_length, hop_length, n_mels):
         #df = pd.read_csv(fname)
         #df["classes"] = encode_classes(df["classes"])
         self.annotations = annotations
-        self.win_sz = win_size  # length of each sample
-        self.sr = sr
+        self.win_sz = sample_size  # length of each sample
+        self.sr = sr    # sample rate
         self.mel_extractor = \
             torch.nn.Sequential( # weird design choice
                 tl.Spectrogram(
@@ -28,13 +28,25 @@ class MusicDataset(Dataset):
                     n_mels=n_mels,
                     is_log=False, # Default is true
                 ))
+        self.num_mels = n_mels
+        self.time_steps = int((sample_size*sr-win_length)/hop_length)
 
     def __len__(self):
         return len(self.annotations)
 
     def __getitem__(self, idx):
         length = int(np.ceil(self.annotations[idx,2]))
+        #print(length)
         path = self.annotations[idx,1]
+        #print(self.annotations[idx,0])
         frames = np.array([librosa.load(path, offset=t, duration=self.win_sz, sr=self.sr)[0]
-                           for t in range(0,length,self.win_sz)])
-        return frames[:,:-1], frames[:,1:], self.annotations[idx,0]  #x, y, cond
+                           for t in range(0,length-self.win_sz,self.win_sz)]) # cut off the last segment of the song (could also do padding)
+        #print(self.win_sz, length)
+        #print(len(frames), [t for t in range(0, length, self.win_sz)])
+        #print([(f.dtype,f.shape) for f in frames])
+        print(frames.shape)
+        spectrogram = self.mel_extractor(torch.tensor(frames)).squeeze()
+        print(spectrogram.shape)
+        return spectrogram[:,:-1], spectrogram[:,1:], torch.tensor(self.annotations[idx,0])  #x, y, cond
+        #return frames, frames, self.annotations[idx,0]  #x, y, cond
+
