@@ -13,32 +13,36 @@ from torch.utils.data import DataLoader
 #import pylab
 
 np.random.seed(36) # to ensure consistency of train-test split
+torch.set_default_tensor_type("torch.cuda.FloatTensor")
 
 # Model hyperparameters
 EPOCHS = 128
-DIMS = 256
-N_LAYERS = [8,3,2,2]
-DIRECTIONS = [2,2,1]
+DIMS = 64
+N_LAYERS = [4,3,2]
+DIRECTIONS = [2,1]
 LEARN_RATE = 1e-5
 TRAIN_SIZE = 0.8
 VALID_SIZE = 0.1
 
 # Data hyperparameters
-WIN_SIZE = 10 # num seconds
-SR = 22050  # sample rate
+WIN_SIZE = 6 # num seconds
+SR = 11025  # sample rate
 STFT_WIN_SIZE = 256
-STFT_HOP_SIZE = 512
-NUM_MELS = 256
+STFT_HOP_SIZE = 1024
+NUM_MELS = 128
 
 def gaussian_pdf(x, mu, sigmasq):
     # adapted from https://mikedusenberry.com/mixture-density-networks
+    print(x.shape, mu.shape, sigmasq.shape)
     return (1/torch.sqrt(2*np.pi*sigmasq)) * torch.exp((-1/(2*sigmasq)) * ((x-mu)**2))
 
 
-def loss_fn(pi, sigmasq, mu, target, num_mixtures=10):
+def loss_fn(mu, sigmasq, pi, target, num_mixtures=10):
     # adapted from https://mikedusenberry.com/mixture-density-networks
     losses = Variable(torch.zeros_like(target))
+    print(target.shape, mu.shape, sigmasq.shape, pi.shape)
     for i in range(num_mixtures):
+        print(mu[...,i].shape)
         likelihood_z_x = gaussian_pdf(target, mu[...,i], sigmasq[..., i])
         prior_z = pi[..., i]
         losses[i] = prior_z * likelihood_z_x
@@ -52,11 +56,11 @@ def train(network, tr_data, va_data):
     valid_loss_list = []
     for epoch in tqdm(range(EPOCHS)):
         for x,y,cond in tr_data:
-            print(x.shape)
+            print("example shape", x.shape)
             optimizer.zero_grad()
             noise = torch.normal(mean=torch.zeros(x.shape[0],1,1))
             pred_params = network(x, cond, noise)
-            batch_loss = loss_fn(pred_params, y)
+            batch_loss = loss_fn(*pred_params, y)
             batch_loss.backward()
             optimizer.step()
             train_loss_list.append(batch_loss)
@@ -91,7 +95,7 @@ va_dataset = data.MusicDataset(df[all_indices][int(size*TRAIN_SIZE):int(size*(TR
 te_dataset = data.MusicDataset(df[all_indices][int(size*TRAIN_SIZE+VALID_SIZE):], *params)
 #elem = tr_dataset[1]
 #print([e.shape for e in elem[:-1]], elem[-1])
-#print(tr_dataset.num_mels, tr_dataset.time_steps)
+print("calculated size", tr_dataset.num_mels, tr_dataset.time_steps)
 #quit()
 tr_load = DataLoader(tr_dataset, batch_size=None, batch_sampler=None, shuffle=False, num_workers=0)
 va_load = DataLoader(va_dataset, batch_size=None, batch_sampler=None, shuffle=False, num_workers=0)

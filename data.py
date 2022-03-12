@@ -29,7 +29,7 @@ class MusicDataset(Dataset):
                     is_log=False, # Default is true
                 ))
         self.num_mels = n_mels
-        self.time_steps = int((sample_size*sr-win_length)/hop_length)
+        self.time_steps = int(np.floor((sample_size*sr-win_length)/hop_length))
 
     def __len__(self):
         return len(self.annotations)
@@ -46,7 +46,6 @@ class MusicDataset(Dataset):
         #print([(f.dtype,f.shape) for f in frames])
         print(frames.shape)
         spectrogram = self.mel_extractor(torch.tensor(frames)).squeeze()
-        print(spectrogram.shape)
+        print("unshifted spec",spectrogram.shape)
         return spectrogram[:,:-1], spectrogram[:,1:], torch.tensor(self.annotations[idx,0])  #x, y, cond
         #return frames, frames, self.annotations[idx,0]  #x, y, cond
-
