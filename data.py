@@ -3,7 +3,7 @@ import librosa.display
 import numpy as np
 import torchlibrosa as tl
 import torch
-import pandas as pd
+#import pandas as pd
 from torch.utils.data import Dataset
 
 def encode_classes(classes):
@@ -12,10 +12,10 @@ def encode_classes(classes):
     return [class_map[name] for name in classes]
 
 class MusicDataset(Dataset):
-    def __init__(self, fname, win_size, sr, win_length=2048, hop_length=512, n_mels=128):
-        df = pd.read_csv(fname)
-        df["classes"] = encode_classes(df["classes"])
-        self.annotations = df
+    def __init__(self, annotations, win_size, sr, win_length, hop_length, n_mels):
+        #df = pd.read_csv(fname)
+        #df["classes"] = encode_classes(df["classes"])
+        self.annotations = annotations
         self.win_sz = win_size  # length of each sample
         self.sr = sr
         self.mel_extractor = \
