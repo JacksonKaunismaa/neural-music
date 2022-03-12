@@ -28,7 +28,7 @@ def main():
         all_entries += get_entries(dir_name)
     with open("out.csv", "w") as csvfile:
         writer = csv.writer(csvfile)
-        writer.writerow(["class", "location", "duration"])
+        writer.writerow(["class", "location", "duration", "sample_rate"])
         writer.writerows(all_entries)
 
 if __name__ == "__main__":
