@@ -1,5 +1,5 @@
-# TAKEN FROM https://github.com/resemble-ai/MelNet/blob/master/model.py
-# training loop and data processing were done by us
+# TAKEN FROM https://github.com/resemble-ai/MelNet/blob/master/model.py, with heavy modification
+# added FeatureExtraction, MelNetTier, and the overall multi-scale architecture
 
 import torch
 import torch.nn as nn
@@ -89,22 +89,32 @@ class FeatureExtraction(nn.Module):
     def __init__(self, num_mels, time_steps, n_layers):
         super().__init__()
         # Input layers
-        self.freq_extract = nn.GRU(time_steps, time_steps, batch_first=True, bidirectional=True)
-        self.time_extract = nn.GRU(num_mels, num_mels, batch_first=True, bidirectional=True)
+        self.freq_fwd = nn.GRU(time_steps, time_steps, batch_first=True)
+        self.freq_back = nn.GRU(time_steps, time_steps, batch_first=True)
+        self.time_fwd = nn.GRU(num_mels, num_mels, batch_first=True)
+        self.time_back = nn.GRU(num_mels, num_mels, batch_first=True)
+        self.weights = nn.Linear(4,1)
+        #self.num_params()
 
     def forward(self, spectrogram):
         # Shift the inputs left for time-delay inputs
         # spectrogram: (batch_size, time, freq)
-
-        N,T,F = spectrogram.size()
+        #print("spec", spectrogram.shape)
+        #N,T,F = spectrogram.size()
         freq_input = spectrogram.transpose(1, 2).contiguous()
 
-        freq_features, _ = self.freq_extract(freq_input)   # (batch, freq, 2*time_steps)
-        time_features, _ = self.time_extract(spectrogram)  # (batch, time, 2*freq_steps)
+        time_fwd_feats, _ = self.time_fwd(spectrogram)
+        time_back_feats, _ = self.time_back(spectrogram.flip(1))
+        freq_fwd_feats, _ = self.freq_fwd(freq_input)
+        freq_back_feats, _ = self.freq_back(freq_input.flip(2))
 
-        freq_features = freq_features.transpose(1,2).contiguous().view(-1, T, 2*F)
-
-        return torch.cat((time_features, freq_features), 1)
+        #freq_features = freq_features.transpose(1,2).contiguous().view(-1, T, 2*F)
+        stacked = torch.stack((time_fwd_feats, time_back_feats, freq_fwd_feats.transpose(1,2), freq_back_feats.transpose(1,2)), dim=-1)  # completely made up btw
+        return self.weights(stacked).squeeze(-1)
+    def num_params(self):
+        parameters = filter(lambda p: p.requires_grad, self.parameters())
+        parameters = sum([np.prod(p.size()) for p in parameters]) / 1_000_000
+        print('Trainable Parametersextrac: %.3fM' % parameters)
 
 
 class MelNetTier(nn.Module):
@@ -146,38 +156,52 @@ class MelNetTier(nn.Module):
 
         # Get the mixture params
         x = torch.cat([x_time, x_freq], dim=-1)
-        mu, sigma, pi = torch.split(self.fc_out(x), self.n_mixtures, axis=-1)
+        mu, sigma, pi = torch.split(self.fc_out(x), self.n_mixtures, dim=-1)
 
         sigma = torch.exp(sigma)
-        pi = torch.softmax(dim=-1)
+        pi = torch.softmax(pi, dim=-1)
         return mu, sigma, pi
 
     def forward_sample(self, x, cond, noise):
         mu, sigma, pi = self.forward(x, cond, noise)
-        mixture = torch.argmax(pi, dim=-1)  # max sampling probably bad because gradients are 0
-        return mu[mixture] + sigma[mixture]*noise
+        mixture = torch.argmax(pi, dim=-1).unsqueeze(-1)  # max sampling probably bad because gradients are 0
+        #print(mu.shape, sigma.shape, pi.shape, mixture.shape)
+        #print(torch.take_along_dim(mu,mixture,dim=-1).shape)
+        #print(sigma[mixture].shape, noise.shape)
+        mu_select = torch.take_along_dim(mu,mixture,dim=-1).squeeze()
+        sigma_select = torch.take_along_dim(sigma,mixture,dim=-1).squeeze()
+        return mu_select + sigma_select*noise
+    def num_params(self):
+        parameters = filter(lambda p: p.requires_grad, self.parameters())
+        parameters = sum([np.prod(p.size()) for p in parameters]) / 1_000_000
+        print('Trainable Parameters Tuer: %.3fM' % parameters)
 
 class MelNet(nn.Module):
-    def __init__(self, dims, layer_sizes, num_classes, num_mels, time_steps, directions, n_mixtures=10):
+    def __init__(self, dims, layer_sizes, num_classes, num_mels, time_steps, directions, feature_layers=1, n_mixtures=10):
         super().__init__()
+        assert(len(layer_sizes)-1 == len(directions))
         self.class_embeds = nn.Embedding(num_classes, 1) # sus
-        self.tiers = [MelNetTier(dims, n_layers) for n_layers in layer_sizes]
+        self.tiers = nn.ModuleList([MelNetTier(dims, n_layers) for n_layers in layer_sizes])
 
         M, T = num_mels, time_steps
-        self.feature_tier = []
-        for d in directions:
+        feature_tiers = []
+        for d in directions[::-1]:
             if d == 1:
                 T //= 2
             else:
                 M //= 2
-            self.feature_tier.append(FeatureExtraction(M,T,2))
+            feature_tiers.append(FeatureExtraction(M,T,feature_layers))
 
+        #print(self.feature_tier)
+        self.feature_tier = nn.ModuleList(feature_tiers[::-1])
+        #print(self.feature_tier)
         #   def __init__(self, num_mels, time_steps, n_layers, n_mixtures=10):
         # Print model size
         self.directions = directions
         self.num_params()
 
-    def split(self, x, dim):
+    @staticmethod
+    def split(x, dim):
         even = torch.arange(x.shape[dim]//2)*2
         odd = even + 1
         if dim == 1:
@@ -185,9 +209,10 @@ class MelNet(nn.Module):
         else:
             return x[:, :, even], x[:, :, odd]
 
-    def interleave(self, x1, x2, dim):
+    @staticmethod
+    def interleave(x1, x2, dim):
         interleaved = torch.repeat_interleave(x1, 2, dim=dim)
-        indices = 1+torch.arange(x1.shape[dim]//2)*2
+        indices = 1+torch.arange(x1.shape[dim])*2
         if dim == 1:
             interleaved[:,indices,:] = x2
         else:
@@ -196,13 +221,17 @@ class MelNet(nn.Module):
 
     def forward(self, x, cond, noise):
         def multi_scale(x, g):
+            #print("lvl", g, x.shape)
             if g == 0:
                 return self.tiers[0].forward_sample(x, self.class_embeds(cond), noise)
             else:
-                dim = self.directions[g]
+                dim = self.directions[g-1]
                 x_g, x_g_prev = self.split(x, dim)
+                #print("on lvl", g, x_g.shape, x_g_prev.shape)
                 x_pred_prev = multi_scale(x_g_prev, g-1)
-                prev_features = self.feature_tier[g](x_pred_prev)
+                #print("on lvl", g, x_pred_prev.shape)
+                prev_features = self.feature_tier[g-1](x_pred_prev)
+                #print(prev_features.shape)
                 if g == len(self.tiers)-1:
                     return self.tiers[g].forward(x_g, prev_features, noise)
                 else:
@@ -216,22 +245,33 @@ class MelNet(nn.Module):
         print('Trainable Parameters: %.3fM' % parameters)
 
 def main():
-    batchsize = 4
-    timesteps = 100
-    num_mels = 256
-    dims = 256
+    torch.set_default_tensor_type("torch.cuda.FloatTensor")
+    batchsize = 2
+    timesteps = 50
+    num_mels = 64
+    dims = 64
 
     #def __init__(self, dims, layer_sizes, num_classes, n_mixtures=10):
-    model = MelNet(dims, [4,3,2], 2, num_mels, timesteps, [1,2,2]) # split on freq(highest tier), then freq(mid tier), then time(unconditional tier)
+    model = MelNet(dims, [4,3,2], 2, num_mels, timesteps, [2,1]) # split on freq (highest tier), split on time(mid tier)
 
     x = torch.ones(batchsize, timesteps, num_mels)
     z = torch.ones((1), dtype=torch.int64)
 
-    print("Input Shape:", x.shape)
-    noise = torch.normal(mean=torch.zeros(batchsize))
-    y = model(x, z, noise)
+    #x1,x2 = MelNet.split(x,1)
+    #x3,x4 = MelNet.split(x,2)
+    #print(x1.shape, x3.shape)
+    #x_freq = MelNet.interleave(x3,x4,2)
+    #x_time = MelNet.interleave(x1,x2,1)
+    #print(x_freq.shape, x_time.shape)
+    #print((x-x_freq).sum(), (x-x_time).sum())
 
-    print("Output Shape", y.shape)
+    print("Input Shape:", x.shape)
+    noise = torch.normal(mean=torch.zeros(batchsize,1,1))
+    y = model(x, z, noise)
+    print("Mu shape", y[0].shape, "Sigma shape", y[1].shape, "Pi shape", y[2].shape)
+    y = model(x, z, noise)
+    print("Mu shape", y[0].shape, "Sigma shape", y[1].shape, "Pi shape", y[2].shape)
+    #print("Output Shape", y.shape)
 
 if __name__ == "__main__":
     main()
