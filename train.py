@@ -4,6 +4,7 @@ from tqdm import tqdm
 import torch
 #import torch.nn as nn
 #import matplotlib
+import glob
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -54,6 +55,8 @@ def train(network, tr_data, va_data):
     optimizer = torch.optim.Adam(network.parameters(), lr=LEARN_RATE)
     train_loss_list = []
     valid_loss_list = []
+    best_loss = np.inf
+    last_save = -np.inf
     for epoch in tqdm(range(EPOCHS)):
         for x,y,cond in tr_data:
             print("example shape", x.shape)
@@ -71,6 +74,10 @@ def train(network, tr_data, va_data):
             batch_loss = loss_fn(pred_params, y)
             va_loss += batch_loss
         valid_loss_list.append(va_loss)
+        if va_loss < best_loss and epoch - last_save > 10: # only save max every 10 epochs
+            network.save(epoch, va_loss)
+            last_save = epoch
+            best_loss = va_loss
         print(va_loss)
 
     plt.plot(train_loss_list,label="Train Loss", color="red")
@@ -102,4 +109,9 @@ va_load = DataLoader(va_dataset, batch_size=None, batch_sampler=None, shuffle=Fa
 te_load = DataLoader(te_dataset, batch_size=None, batch_sampler=None, shuffle=False, num_workers=0)
 
 network = model.MelNet(DIMS, N_LAYERS, 2, tr_dataset.num_mels, tr_dataset.time_steps, DIRECTIONS)
+try:
+    network.load(glob.glob("model_checkpoints/*.model")[-1])
+except IndexError:
+    pass
+
 train(network, tr_load, va_load)

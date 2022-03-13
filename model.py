@@ -182,7 +182,7 @@ class MelNet(nn.Module):
         assert(len(layer_sizes)-2 == len(directions))
         self.class_embeds = nn.Embedding(num_classes, 1) # sus
         self.tiers = nn.ModuleList([MelNetTier(dims, n_layers) for n_layers in layer_sizes])
-
+        self.layer_sizes = layer_sizes
         M, T = num_mels, time_steps
         feature_tiers = [FeatureExtraction(M,T,feature_layers)]
         for d in directions[::-1]:
@@ -199,6 +199,16 @@ class MelNet(nn.Module):
         # Print model size
         self.directions = directions
         self.num_params()
+
+    def save(self, epoch, loss):
+        torch.save({"epoch": epoch, "model_state": self.state_dict(), "loss": loss},
+                   f"model_checkpoints/{','.join(self.layer_sizes)}-{self.num_mels}-{self.time_steps}-{epoch}-{loss}.model")
+
+    def load(self, path):
+        ckpt = torch.load(path)
+        self.load_state_dict(ckpt["model_state"])
+        return ckpt["epoch"]
+
 
     @staticmethod
     def split(x, dim):
