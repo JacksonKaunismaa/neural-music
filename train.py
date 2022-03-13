@@ -13,14 +13,16 @@ from torch.autograd import Variable
 from torch.utils.data import DataLoader
 from torch import autograd
 #import pylab
+import warnings
 
 np.random.seed(36) # to ensure consistency of train-test split
 torch.set_default_tensor_type("torch.cuda.FloatTensor")
+warnings.filterwarnings("ignore", category=UserWarning, module="librosa")
 
 # Model hyperparameters
 EPOCHS = 128
 DIMS = 64
-N_LAYERS = [2,2,2]
+N_LAYERS = [4,2,2]
 DIRECTIONS = [2]
 LEARN_RATE = 1e-5
 TRAIN_SIZE = 0.8
@@ -45,13 +47,15 @@ def loss_fn(mu, sigmasq, pi, target, num_mixtures=10):
     #print(target.shape, mu.shape, sigmasq.shape, pi.shape)
     #for i in range(num_mixtures):
         #print(mu[...,i].shape)
-    likelihood_z_x = gaussian_pdf(target.unsqueeze(-1), mu, sigmasq)
-    print(torch.any(torch.isnan(pi)))
-    print(torch.any(torch.isnan(likelihood_z_x)))
-    prior_z = pi
+    likelihood_z_x = gaussian_pdf(target.unsqueeze(-1), mu, sigmasq) + 1e-5 # add small positive constant
+    #print(torch.any(torch.isnan(pi)))
+    #print(torch.where(torch.isnan(pi)))
+    #print(torch.any(torch.isnan(likelihood_z_x)))
+    prior_z = pi+1e-5  # add small positive constant (to avoid nans)
     losses = (prior_z * likelihood_z_x).sum(axis=-1)
     loss = torch.mean(-torch.log(losses))
-    print(torch.isnan(loss), loss)
+    #print(prior_z.min(), likelihood_z_x.min(), prior_z.mean(), likelihood_z_x.mean())
+    #print(torch.isnan(loss), loss)
     return loss
 
 
@@ -61,29 +65,31 @@ def train(network, tr_data, va_data):
     valid_loss_list = []
     best_loss = np.inf
     last_save = -np.inf
-    for epoch in tqdm(range(EPOCHS)):
-        for x,y,cond in tr_data:
+    for epoch in range(EPOCHS):
+        for x,y,cond in tqdm(tr_data):
             #print("example shape", x.shape)
             optimizer.zero_grad()
-            with autograd.detect_anomaly():
-                noise = torch.normal(mean=torch.zeros(x.shape[0],1,1))
-                print(x,y,cond,noise)
-                pred_params = network(x, cond, noise)
-                print(pred_params[0][0,0])
-                batch_loss = loss_fn(*pred_params, y)
-                batch_loss.backward()
-                optimizer.step()
+            #with autograd.detect_anomaly():
+            noise = torch.normal(mean=torch.zeros(x.shape[0],1,1))
+            #print(x,y,cond,noise)
+            pred_params = network(x, cond, noise)
+            #print(pred_params[0][0,0])
+            batch_loss = loss_fn(*pred_params, y)
+            batch_loss.backward()
+            optimizer.step()
+            #############
             train_loss_list.append(float(batch_loss.item()))
         va_loss = 0
         for x,y,cond in va_data:
             noise = torch.normal(mean=torch.zeros(x.shape[0],1,1))
-            print(x,y,cond,noise)
+            #print(x,y,cond,noise)
             pred_params = network(x, cond, noise)
-            print(pred_params[0][0,0])
+            #print(pred_params[0][0,0])
             batch_loss = loss_fn(*pred_params, y)
             va_loss += float(batch_loss.item())
         valid_loss_list.append(va_loss)
         if va_loss < best_loss and epoch - last_save > 5: # only save max every 5 epochs
+            print("Saving network at epoch", epoch)
             network.save(epoch, va_loss)
             last_save = epoch
             best_loss = va_loss
@@ -97,7 +103,7 @@ def train(network, tr_data, va_data):
     plt.legend()
 
 
-df = pd.read_csv("out.csv")[:10]
+df = pd.read_csv("out.csv")
 df["class"] = data.encode_classes(df["class"])
 size = len(df)
 all_indices = np.arange(size)

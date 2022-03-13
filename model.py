@@ -110,7 +110,13 @@ class FeatureExtraction(nn.Module):
 
         #freq_features = freq_features.transpose(1,2).contiguous().view(-1, T, 2*F)
         stacked = torch.stack((time_fwd_feats, time_back_feats), dim=-1)#, freq_fwd_feats.transpose(1,2), freq_back_feats.transpose(1,2)), dim=-1)  # completely made up btw
+        #assert not torch.any(torch.isinf(spectrogram))
+        #print(spectrogram.max())
+        #assert not torch.any(torch.isinf(time_fwd_feats))
+        #assert not torch.any(torch.isinf(stacked))
+        #assert not torch.any(torch.isinf(self.weights(stacked)))
         return self.weights(stacked).squeeze(-1)
+    
     def num_params(self):
         parameters = filter(lambda p: p.requires_grad, self.parameters())
         parameters = sum([np.prod(p.size()) for p in parameters]) / 1_000_000
@@ -158,8 +164,13 @@ class MelNetTier(nn.Module):
         x = torch.cat([x_time, x_freq], dim=-1)
         mu, sigma, pi = torch.split(self.fc_out(x), self.n_mixtures, dim=-1)
 
-        sigma = torch.exp(sigma)
+        #sigma = torch.exp(sigma)    # causes explosion!
+        sigma = torch.exp(sigma/(self.n_mixtures*torch.norm(sigma,dim=-1).unsqueeze(-1))) # scale by n_mixtures (???) at least it further reduces explosion problem
         pi = torch.softmax(pi, dim=-1)
+
+        #assert not torch.any(torch.isinf(sigma))
+        #assert not torch.any(torch.isinf(pi))
+        #assert not torch.any(torch.isinf(mu))
         return mu, sigma, pi
 
     def forward_sample(self, x, cond, noise):
@@ -173,6 +184,10 @@ class MelNetTier(nn.Module):
         sigma_weighted = (sigma*pi).sum(axis=-1)
         #mu_select = torch.take_along_dim(mu,mixture,dim=-1).squeeze()
         #sigma_select = torch.take_along_dim(sigma,mixture,dim=-1).squeeze()
+        #assert not torch.any(torch.isinf(sigma_weighted))
+        #assert not torch.any(torch.isinf(mu_weighted))
+        result = mu_weighted + sigma_weighted*noise
+        #assert not torch.any(torch.isinf(result))
         return mu_weighted + sigma_weighted*noise
     
     def num_params(self):
@@ -183,7 +198,7 @@ class MelNetTier(nn.Module):
 class MelNet(nn.Module):
     def __init__(self, dims, layer_sizes, num_classes, num_mels, directions, feature_layers=1, n_mixtures=10):
         super().__init__()
-        assert(len(layer_sizes)-2 == len(directions))
+        #assert(len(layer_sizes)-2 == len(directions))
         self.class_embeds = nn.Embedding(num_classes, 1) # sus
         self.tiers = nn.ModuleList([MelNetTier(dims, n_layers) for n_layers in layer_sizes])
         self.layer_sizes = "".join([str(i) for i in layer_sizes])  # for checkpointing
@@ -233,6 +248,8 @@ class MelNet(nn.Module):
         return interleaved
 
     def forward(self, x, cond, noise):
+        #assert(not torch.any(torch.isinf(x)))
+        #assert(not torch.any(torch.isinf(cond)))
         def multi_scale(x, g):
             #print("lvl", g, x.shape)
             if g == 0:
@@ -244,13 +261,16 @@ class MelNet(nn.Module):
                 #print("on lvl", g, x_g.shape, x_g_prev.shape)
                 x_pred_prev = multi_scale(x_g_prev, g-1)
                 #print("on lvl", g, x_pred_prev.shape)
+                #assert not torch.any(torch.isinf(x_pred_prev))
                 prev_features = self.feature_tier[g-1](x_pred_prev)
+                #assert(not torch.any(torch.isinf(prev_features)))
                 #print(prev_features.shape)
                 #print(f"generating (tier {g}): condition({prev_features.shape}) -> out({x_g.shape})")
                 x_pred = self.tiers[g].forward_sample(x_g, prev_features, noise)
                 return self.interleave(x_pred, x_pred_prev, dim)
         prev_context = multi_scale(x, len(self.tiers)-2)
         #print("received final context", prev_context.shape)
+        #assert(not torch.any(torch.isinf(prev_context)))
         prev_features = self.feature_tier[-1](prev_context)
         final_distrib = self.tiers[-1].forward(x, prev_features, noise)
         return final_distrib
@@ -292,3 +312,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
