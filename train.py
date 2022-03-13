@@ -20,7 +20,7 @@ torch.set_default_tensor_type("torch.cuda.FloatTensor")
 warnings.filterwarnings("ignore", category=UserWarning, module="librosa")
 
 # Model hyperparameters
-EPOCHS = 128
+EPOCHS = 30
 DIMS = 64
 N_LAYERS = [4,2,2]
 DIRECTIONS = [2]

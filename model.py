@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-from torch.utils import checkpoint
+#from torch.utils import checkpoint
 
 class FrequencyDelayedStack(nn.Module):
     def __init__(self, dims):
@@ -116,7 +116,7 @@ class FeatureExtraction(nn.Module):
         #assert not torch.any(torch.isinf(stacked))
         #assert not torch.any(torch.isinf(self.weights(stacked)))
         return self.weights(stacked).squeeze(-1)
-    
+
     def num_params(self):
         parameters = filter(lambda p: p.requires_grad, self.parameters())
         parameters = sum([np.prod(p.size()) for p in parameters]) / 1_000_000
@@ -179,17 +179,17 @@ class MelNetTier(nn.Module):
         #print(mu.shape, sigma.shape, pi.shape, mixture.shape)
         #print(torch.take_along_dim(mu,mixture,dim=-1).shape)
         #print(sigma[mixture].shape, noise.shape)
-        
+
         mu_weighted = (mu*pi).sum(axis=-1)    # probably totally unjustified
         sigma_weighted = (sigma*pi).sum(axis=-1)
         #mu_select = torch.take_along_dim(mu,mixture,dim=-1).squeeze()
         #sigma_select = torch.take_along_dim(sigma,mixture,dim=-1).squeeze()
         #assert not torch.any(torch.isinf(sigma_weighted))
         #assert not torch.any(torch.isinf(mu_weighted))
-        result = mu_weighted + sigma_weighted*noise
+        #result = mu_weighted + sigma_weighted*noise
         #assert not torch.any(torch.isinf(result))
         return mu_weighted + sigma_weighted*noise
-    
+
     def num_params(self):
         parameters = filter(lambda p: p.requires_grad, self.parameters())
         parameters = sum([np.prod(p.size()) for p in parameters]) / 1_000_000
