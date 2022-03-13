@@ -2,7 +2,7 @@ import model
 import data
 from tqdm import tqdm
 import torch
-#import torch.nn as nn
+import torch.nn as nn
 #import matplotlib
 import glob
 import matplotlib.pyplot as plt
@@ -11,6 +11,7 @@ import pandas as pd
 #import numpy.random as npr
 from torch.autograd import Variable
 from torch.utils.data import DataLoader
+from torch import autograd
 #import pylab
 
 np.random.seed(36) # to ensure consistency of train-test split
@@ -19,8 +20,8 @@ torch.set_default_tensor_type("torch.cuda.FloatTensor")
 # Model hyperparameters
 EPOCHS = 128
 DIMS = 64
-N_LAYERS = [4,3,2,2]
-DIRECTIONS = [2,1]
+N_LAYERS = [2,2,2]
+DIRECTIONS = [2]
 LEARN_RATE = 1e-5
 TRAIN_SIZE = 0.8
 VALID_SIZE = 0.1
@@ -34,20 +35,23 @@ NUM_MELS = 128
 
 def gaussian_pdf(x, mu, sigmasq):
     # adapted from https://mikedusenberry.com/mixture-density-networks
-    print(x.shape, mu.shape, sigmasq.shape)
+    #print(x.shape, mu.shape, sigmasq.shape)
     return (1/torch.sqrt(2*np.pi*sigmasq)) * torch.exp((-1/(2*sigmasq)) * ((x-mu)**2))
 
 
 def loss_fn(mu, sigmasq, pi, target, num_mixtures=10):
     # adapted from https://mikedusenberry.com/mixture-density-networks
-    losses = Variable(torch.zeros_like(target))
-    print(target.shape, mu.shape, sigmasq.shape, pi.shape)
-    for i in range(num_mixtures):
-        print(mu[...,i].shape)
-        likelihood_z_x = gaussian_pdf(target, mu[...,i], sigmasq[..., i])
-        prior_z = pi[..., i]
-        losses[i] = prior_z * likelihood_z_x
+    #losses = Variable(torch.zeros_like(target))
+    #print(target.shape, mu.shape, sigmasq.shape, pi.shape)
+    #for i in range(num_mixtures):
+        #print(mu[...,i].shape)
+    likelihood_z_x = gaussian_pdf(target.unsqueeze(-1), mu, sigmasq)
+    print(torch.any(torch.isnan(pi)))
+    print(torch.any(torch.isnan(likelihood_z_x)))
+    prior_z = pi
+    losses = (prior_z * likelihood_z_x).sum(axis=-1)
     loss = torch.mean(-torch.log(losses))
+    print(torch.isnan(loss), loss)
     return loss
 
 
@@ -59,22 +63,27 @@ def train(network, tr_data, va_data):
     last_save = -np.inf
     for epoch in tqdm(range(EPOCHS)):
         for x,y,cond in tr_data:
-            print("example shape", x.shape)
+            #print("example shape", x.shape)
             optimizer.zero_grad()
-            noise = torch.normal(mean=torch.zeros(x.shape[0],1,1))
-            pred_params = network(x, cond, noise)
-            batch_loss = loss_fn(*pred_params, y)
-            batch_loss.backward()
-            optimizer.step()
-            train_loss_list.append(batch_loss)
+            with autograd.detect_anomaly():
+                noise = torch.normal(mean=torch.zeros(x.shape[0],1,1))
+                print(x,y,cond,noise)
+                pred_params = network(x, cond, noise)
+                print(pred_params[0][0,0])
+                batch_loss = loss_fn(*pred_params, y)
+                batch_loss.backward()
+                optimizer.step()
+            train_loss_list.append(float(batch_loss.item()))
         va_loss = 0
         for x,y,cond in va_data:
-            noise = torch.normal(size=(x.shape[0],1,1))
+            noise = torch.normal(mean=torch.zeros(x.shape[0],1,1))
+            print(x,y,cond,noise)
             pred_params = network(x, cond, noise)
-            batch_loss = loss_fn(pred_params, y)
-            va_loss += batch_loss
+            print(pred_params[0][0,0])
+            batch_loss = loss_fn(*pred_params, y)
+            va_loss += float(batch_loss.item())
         valid_loss_list.append(va_loss)
-        if va_loss < best_loss and epoch - last_save > 10: # only save max every 10 epochs
+        if va_loss < best_loss and epoch - last_save > 5: # only save max every 5 epochs
             network.save(epoch, va_loss)
             last_save = epoch
             best_loss = va_loss
@@ -88,7 +97,7 @@ def train(network, tr_data, va_data):
     plt.legend()
 
 
-df = pd.read_csv("out.csv")
+df = pd.read_csv("out.csv")[:10]
 df["class"] = data.encode_classes(df["class"])
 size = len(df)
 all_indices = np.arange(size)
@@ -108,7 +117,7 @@ tr_load = DataLoader(tr_dataset, batch_size=None, batch_sampler=None, shuffle=Fa
 va_load = DataLoader(va_dataset, batch_size=None, batch_sampler=None, shuffle=False, num_workers=0)
 te_load = DataLoader(te_dataset, batch_size=None, batch_sampler=None, shuffle=False, num_workers=0)
 
-network = model.MelNet(DIMS, N_LAYERS, 2, tr_dataset.num_mels, tr_dataset.time_steps, DIRECTIONS)
+network = model.MelNet(DIMS, N_LAYERS, 2, tr_dataset.num_mels, DIRECTIONS)
 try:
     network.load(glob.glob("model_checkpoints/*.model")[-1])
 except IndexError:

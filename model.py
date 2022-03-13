@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-
+from torch.utils import checkpoint
 
 class FrequencyDelayedStack(nn.Module):
     def __init__(self, dims):
@@ -86,14 +86,14 @@ class Layer(nn.Module):
         return [x_time, x_freq]
 
 class FeatureExtraction(nn.Module):
-    def __init__(self, num_mels, time_steps, n_layers):
+    def __init__(self, num_mels, n_layers):
         super().__init__()
         # Input layers
-        self.freq_fwd = nn.GRU(time_steps, time_steps, batch_first=True)
-        self.freq_back = nn.GRU(time_steps, time_steps, batch_first=True)
+        #self.freq_fwd = nn.GRU(time_steps, time_steps, batch_first=True)
+        #self.freq_back = nn.GRU(time_steps, time_steps, batch_first=True)
         self.time_fwd = nn.GRU(num_mels, num_mels, batch_first=True)
         self.time_back = nn.GRU(num_mels, num_mels, batch_first=True)
-        self.weights = nn.Linear(4,1)
+        self.weights = nn.Linear(2,1)
         #self.num_params()
 
     def forward(self, spectrogram):
@@ -101,15 +101,15 @@ class FeatureExtraction(nn.Module):
         # spectrogram: (batch_size, time, freq)
         #print("spec", spectrogram.shape)
         #N,T,F = spectrogram.size()
-        freq_input = spectrogram.transpose(1, 2).contiguous()
+        #freq_input = spectrogram.transpose(1, 2).contiguous()
 
         time_fwd_feats, _ = self.time_fwd(spectrogram)
         time_back_feats, _ = self.time_back(spectrogram.flip(1))
-        freq_fwd_feats, _ = self.freq_fwd(freq_input)
-        freq_back_feats, _ = self.freq_back(freq_input.flip(2))
+        #freq_fwd_feats, _ = self.freq_fwd(freq_input)
+        #freq_back_feats, _ = self.freq_back(freq_input.flip(2))
 
         #freq_features = freq_features.transpose(1,2).contiguous().view(-1, T, 2*F)
-        stacked = torch.stack((time_fwd_feats, time_back_feats, freq_fwd_feats.transpose(1,2), freq_back_feats.transpose(1,2)), dim=-1)  # completely made up btw
+        stacked = torch.stack((time_fwd_feats, time_back_feats), dim=-1)#, freq_fwd_feats.transpose(1,2), freq_back_feats.transpose(1,2)), dim=-1)  # completely made up btw
         return self.weights(stacked).squeeze(-1)
     def num_params(self):
         parameters = filter(lambda p: p.requires_grad, self.parameters())
@@ -164,33 +164,35 @@ class MelNetTier(nn.Module):
 
     def forward_sample(self, x, cond, noise):
         mu, sigma, pi = self.forward(x, cond, noise)
-        mixture = torch.argmax(pi, dim=-1).unsqueeze(-1)  # max sampling probably bad because gradients are 0
+        # mixture = torch.argmax(pi, dim=-1).unsqueeze(-1)  # max sampling probably bad because gradients are 0 -- it caused nans :(
         #print(mu.shape, sigma.shape, pi.shape, mixture.shape)
         #print(torch.take_along_dim(mu,mixture,dim=-1).shape)
         #print(sigma[mixture].shape, noise.shape)
-        mu_select = torch.take_along_dim(mu,mixture,dim=-1).squeeze()
-        sigma_select = torch.take_along_dim(sigma,mixture,dim=-1).squeeze()
-        return mu_select + sigma_select*noise
+        
+        mu_weighted = (mu*pi).sum(axis=-1)    # probably totally unjustified
+        sigma_weighted = (sigma*pi).sum(axis=-1)
+        #mu_select = torch.take_along_dim(mu,mixture,dim=-1).squeeze()
+        #sigma_select = torch.take_along_dim(sigma,mixture,dim=-1).squeeze()
+        return mu_weighted + sigma_weighted*noise
+    
     def num_params(self):
         parameters = filter(lambda p: p.requires_grad, self.parameters())
         parameters = sum([np.prod(p.size()) for p in parameters]) / 1_000_000
         print('Trainable Parameters Tuer: %.3fM' % parameters)
 
 class MelNet(nn.Module):
-    def __init__(self, dims, layer_sizes, num_classes, num_mels, time_steps, directions, feature_layers=1, n_mixtures=10):
+    def __init__(self, dims, layer_sizes, num_classes, num_mels, directions, feature_layers=1, n_mixtures=10):
         super().__init__()
         assert(len(layer_sizes)-2 == len(directions))
         self.class_embeds = nn.Embedding(num_classes, 1) # sus
         self.tiers = nn.ModuleList([MelNetTier(dims, n_layers) for n_layers in layer_sizes])
-        self.layer_sizes = layer_sizes
-        M, T = num_mels, time_steps
-        feature_tiers = [FeatureExtraction(M,T,feature_layers)]
+        self.layer_sizes = "".join([str(i) for i in layer_sizes])  # for checkpointing
+        M = num_mels
+        feature_tiers = [FeatureExtraction(M,feature_layers)]
         for d in directions[::-1]:
-            if d == 1:
-                T //= 2
-            else:
+            if d == 2:
                 M //= 2
-            feature_tiers.append(FeatureExtraction(M,T,feature_layers))
+            feature_tiers.append(FeatureExtraction(M,feature_layers))
 
         #print(self.feature_tier)
         self.feature_tier = nn.ModuleList(feature_tiers[::-1])
@@ -198,11 +200,12 @@ class MelNet(nn.Module):
         #   def __init__(self, num_mels, time_steps, n_layers, n_mixtures=10):
         # Print model size
         self.directions = directions
+        self.num_mels = num_mels
         self.num_params()
 
     def save(self, epoch, loss):
         torch.save({"epoch": epoch, "model_state": self.state_dict(), "loss": loss},
-                   f"model_checkpoints/{','.join(self.layer_sizes)}-{self.num_mels}-{self.time_steps}-{epoch}-{loss}.model")
+                   f"model_checkpoints/{self.layer_sizes}-{self.num_mels}-{epoch}-{loss}.model")
 
     def load(self, path):
         ckpt = torch.load(path)
@@ -283,6 +286,7 @@ def main():
     y = model(x, z, noise)
     print("Mu shape", y[0].shape, "Sigma shape", y[1].shape, "Pi shape", y[2].shape)
     y = model(x, z, noise)
+    print(y)
     print("Mu shape", y[0].shape, "Sigma shape", y[1].shape, "Pi shape", y[2].shape)
     #print("Output Shape", y.shape)
 

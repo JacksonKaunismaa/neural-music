@@ -38,14 +38,16 @@ class MusicDataset(Dataset):
         length = int(np.ceil(self.annotations[idx,2]))
         #print(length)
         path = self.annotations[idx,1]
+        print("loading", path)
         #print(self.annotations[idx,0])
         frames = np.array([librosa.load(path, offset=t, duration=self.win_sz, sr=self.sr)[0]
-                           for t in range(0,length-self.win_sz,self.win_sz)]) # cut off the last segment of the song (could also do padding)
+                           for t in range(0,min(length-self.win_sz,12*self.win_sz),self.win_sz)]) # cut off the last segment of the song (could also do padding)
         #print(self.win_sz, length)
         #print(len(frames), [t for t in range(0, length, self.win_sz)])
         #print([(f.dtype,f.shape) for f in frames])
-        print(frames.shape)
+        #print(frames.shape)
         spectrogram = self.mel_extractor(torch.tensor(frames)).squeeze()
-        print("unshifted spec",spectrogram.shape)
+        #print("unshifted spec",spectrogram.shape)
+
         return spectrogram[:,:-1], spectrogram[:,1:], torch.tensor(self.annotations[idx,0])  #x, y, cond
         #return frames, frames, self.annotations[idx,0]  #x, y, cond
