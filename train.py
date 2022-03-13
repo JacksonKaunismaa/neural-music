@@ -18,7 +18,7 @@ torch.set_default_tensor_type("torch.cuda.FloatTensor")
 # Model hyperparameters
 EPOCHS = 128
 DIMS = 64
-N_LAYERS = [4,3,2]
+N_LAYERS = [4,3,2,2]
 DIRECTIONS = [2,1]
 LEARN_RATE = 1e-5
 TRAIN_SIZE = 0.8

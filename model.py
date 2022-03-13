@@ -179,12 +179,12 @@ class MelNetTier(nn.Module):
 class MelNet(nn.Module):
     def __init__(self, dims, layer_sizes, num_classes, num_mels, time_steps, directions, feature_layers=1, n_mixtures=10):
         super().__init__()
-        assert(len(layer_sizes)-1 == len(directions))
+        assert(len(layer_sizes)-2 == len(directions))
         self.class_embeds = nn.Embedding(num_classes, 1) # sus
         self.tiers = nn.ModuleList([MelNetTier(dims, n_layers) for n_layers in layer_sizes])
 
         M, T = num_mels, time_steps
-        feature_tiers = []
+        feature_tiers = [FeatureExtraction(M,T,feature_layers)]
         for d in directions[::-1]:
             if d == 1:
                 T //= 2
@@ -223,6 +223,7 @@ class MelNet(nn.Module):
         def multi_scale(x, g):
             #print("lvl", g, x.shape)
             if g == 0:
+                #print(f"generating (tier {g}): condition() -> out({x.shape})")
                 return self.tiers[0].forward_sample(x, self.class_embeds(cond), noise)
             else:
                 dim = self.directions[g-1]
@@ -232,12 +233,14 @@ class MelNet(nn.Module):
                 #print("on lvl", g, x_pred_prev.shape)
                 prev_features = self.feature_tier[g-1](x_pred_prev)
                 #print(prev_features.shape)
-                if g == len(self.tiers)-1:
-                    return self.tiers[g].forward(x_g, prev_features, noise)
-                else:
-                    x_pred = self.tiers[g].forward_sample(x_g, prev_features, noise)
-                    return self.interleave(x_pred, x_pred_prev, dim)
-        return multi_scale(x, len(self.tiers)-1)
+                #print(f"generating (tier {g}): condition({prev_features.shape}) -> out({x_g.shape})")
+                x_pred = self.tiers[g].forward_sample(x_g, prev_features, noise)
+                return self.interleave(x_pred, x_pred_prev, dim)
+        prev_context = multi_scale(x, len(self.tiers)-2)
+        #print("received final context", prev_context.shape)
+        prev_features = self.feature_tier[-1](prev_context)
+        final_distrib = self.tiers[-1].forward(x, prev_features, noise)
+        return final_distrib
 
     def num_params(self):
         parameters = filter(lambda p: p.requires_grad, self.parameters())
@@ -252,7 +255,7 @@ def main():
     dims = 64
 
     #def __init__(self, dims, layer_sizes, num_classes, n_mixtures=10):
-    model = MelNet(dims, [4,3,2], 2, num_mels, timesteps, [2,1]) # split on freq (highest tier), split on time(mid tier)
+    model = MelNet(dims, [4,3,2,2], 2, num_mels, timesteps, [2,1]) # split on freq (highest tier), split on time(mid tier)
 
     x = torch.ones(batchsize, timesteps, num_mels)
     z = torch.ones((1), dtype=torch.int64)
