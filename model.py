@@ -1,5 +1,7 @@
+# PyTorch Implementation of https://arxiv.org/pdf/1906.01083.pdf
 # TAKEN FROM https://github.com/resemble-ai/MelNet/blob/master/model.py, with heavy modification
 # added FeatureExtraction, MelNetTier, and the overall multi-scale architecture
+
 
 import torch
 import torch.nn as nn
