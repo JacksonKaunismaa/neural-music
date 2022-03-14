@@ -14,6 +14,6 @@ librosa must be installed
 https://github.com/librosa/librosa
 
 ## Training the network
-- In ' data.py  ' we made a datapipeline to automatically load ' wav ' form data and convert them to spectrogram 
+- In `data.py` we made a datapipeline to automatically load `wav` form data and convert them to spectrogram 
 
 ## Generating music 
