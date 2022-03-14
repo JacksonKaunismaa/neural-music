@@ -25,3 +25,6 @@ Spectrograms are like pictures of sounds. They provide a 2-D representation of a
 - link to paper
 
 ## Next Step
+
+## License 
+MIT License
