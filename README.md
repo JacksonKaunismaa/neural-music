@@ -14,5 +14,6 @@ Spectrograms are like pictures of sounds. They provide a 2-D representation of a
 
 ## Training the network
 - In `data.py` we made a datapipeline to automatically load `.wav` form data and convert them to spectrogram and store them in `.csv` format
+- load data and change the parameters in `train.py` to train the model
 
 ## Generating music 
