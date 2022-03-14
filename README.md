@@ -10,9 +10,9 @@ Spectrograms are like pictures of sounds. They provide a 2-D representation of a
 *figure 1 - MelSpectrogram representation of audio*
 
 ## Requirements
-- The model was trained and tested with PyTorch 1.10.2.
+- The model was trained and tested with Python 3.9.7 PyTorch 1.10.2.
 
-- librosa must be installed https://github.com/librosa/librosa.
+- librosa must be installed https://github.com/librosa/librosa. Ther librosa version we used is 0.9.1
 
 ## Training the network
 - In `data.py` we made a datapipeline to automatically load `.wav` form data and convert them to spectrogram and store them in `.csv` format.
