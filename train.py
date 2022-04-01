@@ -15,9 +15,6 @@ from torch import autograd
 #import pylab
 import warnings
 
-np.random.seed(36) # to ensure consistency of train-test split
-torch.set_default_tensor_type("torch.cuda.FloatTensor")
-warnings.filterwarnings("ignore", category=UserWarning, module="librosa")
 
 # Model hyperparameters
 EPOCHS = 30
@@ -103,30 +100,35 @@ def train(network, tr_data, va_data):
     plt.legend()
 
 
-df = pd.read_csv("out.csv")
-df["class"] = data.encode_classes(df["class"])
-size = len(df)
-all_indices = np.arange(size)
-np.random.shuffle(all_indices)
-df = np.array(df)
+if __name__ == "__main__":
+    np.random.seed(36) # to ensure consistency of train-test split
+    torch.set_default_tensor_type("torch.cuda.FloatTensor")
+    warnings.filterwarnings("ignore", category=UserWarning, module="librosa")
 
-params = (WIN_SIZE, SR, STFT_WIN_SIZE, STFT_HOP_SIZE, NUM_MELS)
+    df = pd.read_csv("out.csv")
+    df["class"] = data.encode_classes(df["class"])
+    size = len(df)
+    all_indices = np.arange(size)
+    np.random.shuffle(all_indices)
+    df = np.array(df)
 
-tr_dataset = data.MusicDataset(df[all_indices][:int(size*TRAIN_SIZE)], *params)
-va_dataset = data.MusicDataset(df[all_indices][int(size*TRAIN_SIZE):int(size*(TRAIN_SIZE+VALID_SIZE))], *params)
-te_dataset = data.MusicDataset(df[all_indices][int(size*TRAIN_SIZE+VALID_SIZE):], *params)
-#elem = tr_dataset[1]
-#print([e.shape for e in elem[:-1]], elem[-1])
-print("calculated size", tr_dataset.num_mels, tr_dataset.time_steps)
-#quit()
-tr_load = DataLoader(tr_dataset, batch_size=None, batch_sampler=None, shuffle=False, num_workers=0)
-va_load = DataLoader(va_dataset, batch_size=None, batch_sampler=None, shuffle=False, num_workers=0)
-te_load = DataLoader(te_dataset, batch_size=None, batch_sampler=None, shuffle=False, num_workers=0)
+    params = (WIN_SIZE, SR, STFT_WIN_SIZE, STFT_HOP_SIZE, NUM_MELS)
 
-network = model.MelNet(DIMS, N_LAYERS, 2, tr_dataset.num_mels, DIRECTIONS)
-try:
-    network.load(glob.glob("model_checkpoints/*.model")[-1])
-except IndexError:
-    pass
+    tr_dataset = data.MusicDataset(df[all_indices][:int(size*TRAIN_SIZE)], *params)
+    va_dataset = data.MusicDataset(df[all_indices][int(size*TRAIN_SIZE):int(size*(TRAIN_SIZE+VALID_SIZE))], *params)
+    te_dataset = data.MusicDataset(df[all_indices][int(size*TRAIN_SIZE+VALID_SIZE):], *params)
+    #elem = tr_dataset[1]
+    #print([e.shape for e in elem[:-1]], elem[-1])
+    print("calculated size", tr_dataset.num_mels, tr_dataset.time_steps)
+    #quit()
+    tr_load = DataLoader(tr_dataset, batch_size=None, batch_sampler=None, shuffle=False, num_workers=0)
+    va_load = DataLoader(va_dataset, batch_size=None, batch_sampler=None, shuffle=False, num_workers=0)
+    te_load = DataLoader(te_dataset, batch_size=None, batch_sampler=None, shuffle=False, num_workers=0)
 
-train(network, tr_load, va_load)
+    network = model.MelNet(DIMS, N_LAYERS, 2, tr_dataset.num_mels, DIRECTIONS)
+    try:
+        network.load(glob.glob("model_checkpoints/*.model")[-1])
+    except IndexError:
+        pass
+
+    train(network, tr_load, va_load)

@@ -9,8 +9,6 @@ import librosa
 import soundfile
 import librosa.display
 import matplotlib.pyplot as plt
-torch.set_default_tensor_type("torch.cuda.FloatTensor")
-warnings.filterwarnings("ignore", category=UserWarning, module="librosa")
 
 # Model hyperparameters
 EPOCHS = 30
@@ -29,14 +27,6 @@ STFT_HOP_SIZE = 1024
 NUM_MELS = 128
 
 
-#network = model.MelNet(DIMS, N_LAYERS, 2, NUM_MELS, DIRECTIONS)
-#try:
-#    path = "model_checkpoints/422-128-30-67.23719781637192.model" #glob.glob("model_checkpoints/*.model")[-1]
-#    print("loading", path)
-#    network.load(path)
-#except IndexError:
-#    print("Must train a model first")
-#    raise
 
 def invert_and_save(spect, genre):
     final_spectrogram = (spect.squeeze()).detach().cpu().numpy()
@@ -70,7 +60,18 @@ def gen_one(genre):
         current = torch.cat((current, next_col), dim=1)
     invert_and_save(current, genre)
 
-#for g in [1,1,1,1,1,1,1,1,1,1,1]:
-#    gen_one(g)
 
-test_mel_params()
+if __name__ == "__main__":
+    torch.set_default_tensor_type("torch.cuda.FloatTensor")
+    warnings.filterwarnings("ignore", category=UserWarning, module="librosa")
+    #network = model.MelNet(DIMS, N_LAYERS, 2, NUM_MELS, DIRECTIONS)
+    #try:
+    #    path = "model_checkpoints/422-128-30-67.23719781637192.model" #glob.glob("model_checkpoints/*.model")[-1]
+    #    print("loading", path)
+    #    network.load(path)
+    #except IndexError:
+    #    print("Must train a model first")
+    #    raise
+    #for g in [1,1,1,1,1,1,1,1,1,1,1]:
+    #    gen_one(g)
+    test_mel_params()

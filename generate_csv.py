@@ -4,7 +4,6 @@ import librosa
 import sys
 import os
 
-
 endings = ["m4a", "opus", "wav", "mp3"]
 
 def get_entries(directory):
@@ -14,17 +13,12 @@ def get_entries(directory):
         print(files, end)
         for f in files:
             sr = librosa.get_samplerate(f)
-            try:
-                entries.append((directory, f, librosa.get_duration(filename=f), sr))
-            except:
-                raise
+            entries.append((directory, f, librosa.get_duration(filename=f), sr))
     return entries
 
-
-
-def main():
+def gen_csv(dir_names):
     all_entries = []
-    for dir_name in sys.argv[1:]:
+    for dir_name in dir_names:
         all_entries += get_entries(dir_name)
     with open("out.csv", "w") as csvfile:
         writer = csv.writer(csvfile)
@@ -32,4 +26,4 @@ def main():
         writer.writerows(all_entries)
 
 if __name__ == "__main__":
-    main()
+    gen_csv(sys.argv[1:])
