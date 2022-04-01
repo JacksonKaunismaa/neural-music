@@ -1,10 +1,10 @@
 import librosa
 import librosa.display
 import numpy as np
-import torchlibrosa as tl
 import torch
 #import pandas as pd
 from torch.utils.data import Dataset
+import torchaudio
 
 def encode_classes(classes):
     class_names = set(classes) # gets all unique class types
@@ -27,7 +27,7 @@ class MusicDataset(Dataset):
         #df = pd.read_csv(fname)
         #df["classes"] = encode_classes(df["classes"])
         self.annotations = annotations
-        self.win_sz = config.win_sv  # length of each sample
+        self.win_sz = config.win_sz  # length of each sample
         self.sr = config.sr    # sample rate
         self.mel_extractor = torchaudio.transforms.MelSpectrogram(
             sample_rate=self.sr,
@@ -36,18 +36,7 @@ class MusicDataset(Dataset):
             n_mels=config.num_mels,
         )
         self.gpu = torch.device("cuda:0")
-        #self.mel_extractor = \
-        #    torch.nn.Sequential( # weird design choice
-        #        tl.Spectrogram(
-        #            hop_length=config.hop_length,
-        #            win_length=config.win_length,
-        #        ), tl.LogmelFilterBank(
-        #            sr=sr,
-        #            n_mels=n_mels,
-        #            is_log=False, # Default is true
-        #        ))
-        #self.num_mels = n_mels
-        #self.time_steps = int(np.floor((sample_size*sr-win_length)/hop_length))
+        self.num_mels = config.num_mels
 
 
     def __len__(self):
