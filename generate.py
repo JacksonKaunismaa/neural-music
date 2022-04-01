@@ -27,7 +27,7 @@ def test_mel_params(config):
     soundfile.write("test2.wav",  audio, config.sr, "PCM_24")
     print(s.shape)
 
-def gen_one(genre, net):
+def gen_one(genre, net, config):
     desired_steps = 256
     current = torch.zeros((1,1,net.num_mels))
     for _ in tqdm(range(desired_steps)):
@@ -38,7 +38,7 @@ def gen_one(genre, net):
         mixture = MixtureSameFamily(categs, normals)
         next_col = mixture.sample()[0,-1,:].unsqueeze(0).unsqueeze(1)
         current = torch.cat((current, next_col), dim=1)
-    invert_and_save(current, genre)
+    invert_and_save(current, genre, config)
 
 
 if __name__ == "__main__":
