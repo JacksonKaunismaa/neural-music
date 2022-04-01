@@ -13,68 +13,51 @@ from torch.autograd import Variable
 from torch.utils.data import DataLoader
 from torch import autograd
 #import pylab
-import warnings
+
+class TrainConfig:
+    # Model hyperparameters
+    epochs = 30
+    dims = 64
+    n_layers = [4,2,2]
+    directions = [2]
+    learn_rate = 1e-5
+    train_pct = 0.8
+    valid_pct = 0.1
+
+    def __init__(self, **kwargs):
+        for k,v in kwargs.items():
+            setattr(self, k, v)
 
 
-# Model hyperparameters
-EPOCHS = 30
-DIMS = 64
-N_LAYERS = [4,2,2]
-DIRECTIONS = [2]
-LEARN_RATE = 1e-5
-TRAIN_SIZE = 0.8
-VALID_SIZE = 0.1
-
-# Data hyperparameters
-WIN_SIZE = 6 # num seconds
-SR = 11025  # sample rate
-STFT_WIN_SIZE = 256
-STFT_HOP_SIZE = 1024
-NUM_MELS = 128
 
 def gaussian_pdf(x, mu, sigmasq):
     # adapted from https://mikedusenberry.com/mixture-density-networks
-    #print(x.shape, mu.shape, sigmasq.shape)
     return (1/torch.sqrt(2*np.pi*sigmasq)) * torch.exp((-1/(2*sigmasq)) * ((x-mu)**2))
 
 
 def loss_fn(mu, sigmasq, pi, target, num_mixtures=10):
     # adapted from https://mikedusenberry.com/mixture-density-networks
-    #losses = Variable(torch.zeros_like(target))
-    #print(target.shape, mu.shape, sigmasq.shape, pi.shape)
-    #for i in range(num_mixtures):
-        #print(mu[...,i].shape)
     likelihood_z_x = gaussian_pdf(target.unsqueeze(-1), mu, sigmasq) + 1e-5 # add small positive constant
-    #print(torch.any(torch.isnan(pi)))
-    #print(torch.where(torch.isnan(pi)))
-    #print(torch.any(torch.isnan(likelihood_z_x)))
     prior_z = pi+1e-5  # add small positive constant (to avoid nans)
     losses = (prior_z * likelihood_z_x).sum(axis=-1)
     loss = torch.mean(-torch.log(losses))
-    #print(prior_z.min(), likelihood_z_x.min(), prior_z.mean(), likelihood_z_x.mean())
-    #print(torch.isnan(loss), loss)
     return loss
 
 
-def train(network, tr_data, va_data):
-    optimizer = torch.optim.Adam(network.parameters(), lr=LEARN_RATE)
+def train(network, tr_data, va_data, config):
+    optimizer = torch.optim.Adam(network.parameters(), lr=config.lr)
     train_loss_list = []
     valid_loss_list = []
     best_loss = np.inf
     last_save = -np.inf
-    for epoch in range(EPOCHS):
+    for epoch in range(config.epochs):
         for x,y,cond in tqdm(tr_data):
-            #print("example shape", x.shape)
             optimizer.zero_grad()
-            #with autograd.detect_anomaly():
             noise = torch.normal(mean=torch.zeros(x.shape[0],1,1))
-            #print(x,y,cond,noise)
             pred_params = network(x, cond, noise)
-            #print(pred_params[0][0,0])
             batch_loss = loss_fn(*pred_params, y)
             batch_loss.backward()
             optimizer.step()
-            #############
             train_loss_list.append(float(batch_loss.item()))
         va_loss = 0
         for x,y,cond in va_data:
@@ -98,37 +81,3 @@ def train(network, tr_data, va_data):
     plt.ylabel("Losses")
     plt.title("Training and Validation Losses")
     plt.legend()
-
-
-if __name__ == "__main__":
-    np.random.seed(36) # to ensure consistency of train-test split
-    torch.set_default_tensor_type("torch.cuda.FloatTensor")
-    warnings.filterwarnings("ignore", category=UserWarning, module="librosa")
-
-    df = pd.read_csv("out.csv")
-    df["class"] = data.encode_classes(df["class"])
-    size = len(df)
-    all_indices = np.arange(size)
-    np.random.shuffle(all_indices)
-    df = np.array(df)
-
-    params = (WIN_SIZE, SR, STFT_WIN_SIZE, STFT_HOP_SIZE, NUM_MELS)
-
-    tr_dataset = data.MusicDataset(df[all_indices][:int(size*TRAIN_SIZE)], *params)
-    va_dataset = data.MusicDataset(df[all_indices][int(size*TRAIN_SIZE):int(size*(TRAIN_SIZE+VALID_SIZE))], *params)
-    te_dataset = data.MusicDataset(df[all_indices][int(size*TRAIN_SIZE+VALID_SIZE):], *params)
-    #elem = tr_dataset[1]
-    #print([e.shape for e in elem[:-1]], elem[-1])
-    print("calculated size", tr_dataset.num_mels, tr_dataset.time_steps)
-    #quit()
-    tr_load = DataLoader(tr_dataset, batch_size=None, batch_sampler=None, shuffle=False, num_workers=0)
-    va_load = DataLoader(va_dataset, batch_size=None, batch_sampler=None, shuffle=False, num_workers=0)
-    te_load = DataLoader(te_dataset, batch_size=None, batch_sampler=None, shuffle=False, num_workers=0)
-
-    network = model.MelNet(DIMS, N_LAYERS, 2, tr_dataset.num_mels, DIRECTIONS)
-    try:
-        network.load(glob.glob("model_checkpoints/*.model")[-1])
-    except IndexError:
-        pass
-
-    train(network, tr_load, va_load)

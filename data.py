@@ -11,42 +11,55 @@ def encode_classes(classes):
     class_map = {name:i for i,name in enumerate(class_names)}
     return [class_map[name] for name in classes]
 
+class DatasetConfig:
+    win_sz = 6 # num seconds
+    sr = 22050  # sample rate
+    stft_win_sz = 256*6
+    stft_hop_sz = 1024
+    num_mels = 128
+    batch_sz = 8
+    def __init__(self, **kwargs):
+        for k,v in kwargs.items():
+            setattr(self, k, v)
+
 class MusicDataset(Dataset):
-    def __init__(self, annotations, sample_size, sr, win_length, hop_length, n_mels):
+    def __init__(self, annotations, config): #sample_size, sr, win_length, hop_length, n_mels):
         #df = pd.read_csv(fname)
         #df["classes"] = encode_classes(df["classes"])
         self.annotations = annotations
-        self.win_sz = sample_size  # length of each sample
-        self.sr = sr    # sample rate
-        self.mel_extractor = \
-            torch.nn.Sequential( # weird design choice
-                tl.Spectrogram(
-                    hop_length=hop_length,
-                    win_length=win_length,
-                ), tl.LogmelFilterBank(
-                    sr=sr,
-                    n_mels=n_mels,
-                    is_log=False, # Default is true
-                ))
-        self.num_mels = n_mels
-        self.time_steps = int(np.floor((sample_size*sr-win_length)/hop_length))
+        self.win_sz = config.win_sv  # length of each sample
+        self.sr = config.sr    # sample rate
+        self.mel_extractor = torchaudio.transforms.MelSpectrogram(
+            sample_rate=self.sr,
+            n_fft=config.stft_win_sz,
+            hop_length=config.stft_hop_sz,
+            n_mels=config.num_mels,
+        )
+        self.gpu = torch.device("cuda:0")
+        #self.mel_extractor = \
+        #    torch.nn.Sequential( # weird design choice
+        #        tl.Spectrogram(
+        #            hop_length=config.hop_length,
+        #            win_length=config.win_length,
+        #        ), tl.LogmelFilterBank(
+        #            sr=sr,
+        #            n_mels=n_mels,
+        #            is_log=False, # Default is true
+        #        ))
+        #self.num_mels = n_mels
+        #self.time_steps = int(np.floor((sample_size*sr-win_length)/hop_length))
+
 
     def __len__(self):
         return len(self.annotations)
 
     def __getitem__(self, idx):
-        length = int(np.ceil(self.annotations[idx,2]))
-        #print(length)
+        #length = int(np.ceil(self.annotations[idx,2]))
         path = self.annotations[idx,1]
-        #print("loading", path)
-        #print(self.annotations[idx,0])
-        frames = np.array([librosa.load(path, offset=t, duration=self.win_sz, sr=self.sr)[0]
-                           for t in range(0,min(length-self.win_sz,8*self.win_sz),self.win_sz)]) # cut off the last segment of the song (could also do padding)
-        #print(self.win_sz, length)
-        #print(len(frames), [t for t in range(0, length, self.win_sz)])
-        #print([(f.dtype,f.shape) for f in frames])
-        #print(frames.shape)
-        spectrogram = self.mel_extractor(torch.tensor(frames)).squeeze()
+        curr_sr = self.annotations[idx,3]
+        frames = torch.tensor(librosa.load(path, offset=self.win_sz, duration=self.win_sz*self.bs, sr=curr_sr)[0], device="cpu")
+        resamp_frames = torch.reshape(torchaudio.functional.resample(frames, curr_sr, self.sr), [self.bs, -1]).to(self.gpu)
+        spectrogram = self.mel_extractor(resamp)
         #print("unshifted spec",spectrogram.shape)
 
         return spectrogram[:,:-1], spectrogram[:,1:], torch.tensor(self.annotations[idx,0])  #x, y, cond

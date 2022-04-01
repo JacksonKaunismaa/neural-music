@@ -198,13 +198,13 @@ class MelNetTier(nn.Module):
         print('Trainable Parameters Tuer: %.3fM' % parameters)
 
 class MelNet(nn.Module):
-    def __init__(self, dims, layer_sizes, num_classes, num_mels, directions, feature_layers=1, n_mixtures=10):
+    def __init__(self, dims, layer_sizes, num_classes, directions, config, feature_layers=1, n_mixtures=10):
         super().__init__()
         #assert(len(layer_sizes)-2 == len(directions))
         self.class_embeds = nn.Embedding(num_classes, 1) # sus
         self.tiers = nn.ModuleList([MelNetTier(dims, n_layers) for n_layers in layer_sizes])
         self.layer_sizes = "".join([str(i) for i in layer_sizes])  # for checkpointing
-        M = num_mels
+        M = config.num_mels
         feature_tiers = [FeatureExtraction(M,feature_layers)]
         for d in directions[::-1]:
             if d == 2:
@@ -217,7 +217,7 @@ class MelNet(nn.Module):
         #   def __init__(self, num_mels, time_steps, n_layers, n_mixtures=10):
         # Print model size
         self.directions = directions
-        self.num_mels = num_mels
+        self.num_mels = config.num_mels
         self.num_params()
 
     def save(self, epoch, loss):
