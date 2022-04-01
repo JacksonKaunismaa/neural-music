@@ -23,20 +23,20 @@ VALID_SIZE = 0.1
 
 # Data hyperparameters
 WIN_SIZE = 6 # num seconds
-SR = 11025  # sample rate
-STFT_WIN_SIZE = 256
+SR = 22050  # sample rate
+STFT_WIN_SIZE = 256*6
 STFT_HOP_SIZE = 1024
 NUM_MELS = 128
 
 
-network = model.MelNet(DIMS, N_LAYERS, 2, NUM_MELS, DIRECTIONS)
-try:
-    path = "model_checkpoints/422-128-30-67.23719781637192.model" #glob.glob("model_checkpoints/*.model")[-1]
-    print("loading", path)
-    network.load(path)
-except IndexError:
-    print("Must train a model first")
-    raise
+#network = model.MelNet(DIMS, N_LAYERS, 2, NUM_MELS, DIRECTIONS)
+#try:
+#    path = "model_checkpoints/422-128-30-67.23719781637192.model" #glob.glob("model_checkpoints/*.model")[-1]
+#    print("loading", path)
+#    network.load(path)
+#except IndexError:
+#    print("Must train a model first")
+#    raise
 
 def invert_and_save(spect, genre):
     final_spectrogram = (spect.squeeze()).detach().cpu().numpy()
@@ -49,10 +49,11 @@ def invert_and_save(spect, genre):
     plt.savefig(f"{genre}_samples/{name}.png")
 
 def test_mel_params():
-    audio = librosa.load("./MUSIC_DATA/maestro-v3.0.0/2004/MIDI-Unprocessed_XP_04_R1_2004_03-05_ORIG_MID--AUDIO_04_R1_2004_05_Track05_wav.wav", duration=10, sr=SR)[0]
-    s = librosa.feature.melspectrogram(audio, hop_length=STFT_HOP_SIZE, win_length=STFT_WIN_SIZE, sr=SR)
+    audio = librosa.load("./music2.wav", duration=WIN_SIZE, sr=SR)[0]
+    s = librosa.feature.melspectrogram(audio, hop_length=STFT_HOP_SIZE, win_length=STFT_WIN_SIZE, sr=SR, n_mels=NUM_MELS)
     audio = librosa.feature.inverse.mel_to_audio(s, sr=SR, hop_length=STFT_HOP_SIZE, win_length=STFT_WIN_SIZE)
-    soundfile.write("test.wav",  audio, SR, "PCM_24")
+    soundfile.write("test2.wav",  audio, SR, "PCM_24")
+    print(s.shape)
 
 def gen_one(genre):
     desired_steps = 256
@@ -69,7 +70,7 @@ def gen_one(genre):
         current = torch.cat((current, next_col), dim=1)
     invert_and_save(current, genre)
 
-for g in [1,1,1,1,1,1,1,1,1,1,1]:
-    gen_one(g)
+#for g in [1,1,1,1,1,1,1,1,1,1,1]:
+#    gen_one(g)
 
-
+test_mel_params()
