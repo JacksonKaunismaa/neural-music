@@ -14,7 +14,7 @@ def get_entries(directory, config):
         for f in files:
             sr = librosa.get_samplerate(f)
             music_len = librosa.get_duration(filename=f)
-            if music_len < config.win_sz*config.batch_sz:
+            if music_len >= config.win_sz*config.batch_sz:
                 entries.append((directory, f, music_len, sr))
     return entries
 
