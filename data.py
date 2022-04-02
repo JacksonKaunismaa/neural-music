@@ -1,6 +1,6 @@
 import librosa
 import librosa.display
-import numpy as np
+#import numpy as np
 import torch
 #import pandas as pd
 from torch.utils.data import Dataset
@@ -46,9 +46,9 @@ class MusicDataset(Dataset):
         #length = int(np.ceil(self.annotations[idx,2]))
         path = self.annotations[idx,1]
         curr_sr = self.annotations[idx,3]
-        frames = torch.tensor(librosa.load(path, offset=self.win_sz, duration=self.win_sz*self.config.bs, sr=curr_sr)[0], device="cpu")
-        resamp_frames = torch.reshape(torchaudio.functional.resample(frames, curr_sr, self.sr), [self.config.bs, -1]).to(self.gpu)
-        spectrogram = self.mel_extractor(resamp)
+        frames = torch.tensor(librosa.load(path, offset=self.win_sz, duration=self.win_sz*self.config.batch_sz, sr=curr_sr)[0], device="cpu")
+        resamp_frames = torch.reshape(torchaudio.functional.resample(frames, curr_sr, self.sr), [self.config.batch_sz, -1]).to(self.gpu)
+        spectrogram = self.mel_extractor(resamp_frames)
         #print("unshifted spec",spectrogram.shape)
 
         return spectrogram[:,:-1], spectrogram[:,1:], torch.tensor(self.annotations[idx,0])  #x, y, cond
