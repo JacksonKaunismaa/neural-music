@@ -37,7 +37,7 @@ class MusicDataset(Dataset):
         )
         self.gpu = torch.device("cuda:0")
         self.num_mels = config.num_mels
-
+        self.config = config
 
     def __len__(self):
         return len(self.annotations)
@@ -46,8 +46,8 @@ class MusicDataset(Dataset):
         #length = int(np.ceil(self.annotations[idx,2]))
         path = self.annotations[idx,1]
         curr_sr = self.annotations[idx,3]
-        frames = torch.tensor(librosa.load(path, offset=self.win_sz, duration=self.win_sz*self.bs, sr=curr_sr)[0], device="cpu")
-        resamp_frames = torch.reshape(torchaudio.functional.resample(frames, curr_sr, self.sr), [self.bs, -1]).to(self.gpu)
+        frames = torch.tensor(librosa.load(path, offset=self.win_sz, duration=self.win_sz*self.config.bs, sr=curr_sr)[0], device="cpu")
+        resamp_frames = torch.reshape(torchaudio.functional.resample(frames, curr_sr, self.sr), [self.config.bs, -1]).to(self.gpu)
         spectrogram = self.mel_extractor(resamp)
         #print("unshifted spec",spectrogram.shape)
 
