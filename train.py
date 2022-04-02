@@ -45,7 +45,7 @@ def loss_fn(mu, sigmasq, pi, target, num_mixtures=10):
 
 
 def train(network, tr_data, va_data, config):
-    optimizer = torch.optim.Adam(network.parameters(), lr=config.lr)
+    optimizer = torch.optim.Adam(network.parameters(), lr=config.learn_rate)
     train_loss_list = []
     valid_loss_list = []
     best_loss = np.inf
