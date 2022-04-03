@@ -24,8 +24,6 @@ class DatasetConfig:
 
 class MusicDataset(Dataset):
     def __init__(self, annotations, config): #sample_size, sr, win_length, hop_length, n_mels):
-        #df = pd.read_csv(fname)
-        #df["classes"] = encode_classes(df["classes"])
         self.annotations = annotations
         self.win_sz = config.win_sz  # length of each sample
         self.sr = config.sr    # sample rate
@@ -38,26 +36,30 @@ class MusicDataset(Dataset):
         ).to(self.gpu)
         self.num_mels = config.num_mels
         self.config = config
-        #print(set(annotations[:,3]))
         self.resamplers = {f:torchaudio.transforms.Resample(orig_freq=f, new_freq=self.sr) for f in set(annotations[:,3])}
+
+        self.idx_to_annotation = []
+        self.idx_to_offset = []
+        for annotate in annotations:
+            song_chunks = annotate[2]//self.win_sz
+            self.idx_to_annotation += [annotate]*song_chunks
+            self.idx_to_offset += list(range(song_chunks))
 
     def __len__(self):
         return len(self.annotations)
 
     def __getitem__(self, idx):
-        #length = int(np.ceil(self.annotations[idx,2]))
-        path = self.annotations[idx,1]
-        curr_sr = self.annotations[idx,3]
+        annotate = self.idx_to_annotation[idx]
+        offset = self.idx_to_offset[idx]
+
+        path = annotate[1]
+        curr_sr = annotate[3]
         resampler = self.resamplers[curr_sr]
-        frames = torch.tensor(librosa.load(path, offset=0.0, duration=self.win_sz*self.config.batch_sz, sr=curr_sr)[0], device="cpu")
-        print(path)
-        print(frames.shape)
-        truncated = len(frames)-len(frames)%8
-        print(truncated)
-        frames = torch.reshape(frames[:truncated], [self.config.batch_sz, -1])
+        frames = torch.tensor(librosa.load(path, offset=offset, duration=self.win_sz, sr=curr_sr)[0], device="cpu")
+        #frames = torch.reshape(frames[:truncated], [self.config.batch_sz, -1])
         resamp_frames = resampler(frames).to(self.gpu)
         spectrogram = self.mel_extractor(resamp_frames)
         #print("unshifted spec",spectrogram.shape)
 
-        return spectrogram[:,:-1], spectrogram[:,1:], torch.tensor(self.annotations[idx,0])  #x, y, cond
+        return spectrogram[:,:-1], spectrogram[:,1:], torch.tensor(annotate[0])  #x, y, cond
         #return frames, frames, self.annotations[idx,0]  #x, y, cond
