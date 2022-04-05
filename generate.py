@@ -54,4 +54,6 @@ if __name__ == "__main__":
     #    raise
     #for g in [1,1,1,1,1,1,1,1,1,1,1]:
     #    gen_one(g)
-    #test_mel_params()
+    import data
+    conf = data.DatasetConfig(num_mels=180, stft_hop_sz=800, stft_win_sz=256*8)
+    test_mel_params(conf)

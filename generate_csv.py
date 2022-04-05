@@ -3,6 +3,7 @@ import csv
 import librosa
 import sys
 import os
+import audioread
 
 endings = ["m4a", "opus", "wav", "mp3"]
 
@@ -12,10 +13,13 @@ def get_entries(directory, config):
         files = glob.glob(os.path.join(directory, f"*.{end}"))
         print(files, end)
         for f in files:
-            sr = librosa.get_samplerate(f)
-            music_len = librosa.get_duration(filename=f)
-            if music_len >= config.win_sz*config.batch_sz:
-                entries.append((directory, f, music_len, sr))
+            try:
+                sr = librosa.get_samplerate(f)
+                music_len = librosa.get_duration(filename=f)
+                if music_len >= config.win_sz:
+                    entries.append((directory, f, music_len, sr))
+            except audioread.NoBackendError:
+                pass
     return entries
 
 def gen_csv(dir_names, config):
