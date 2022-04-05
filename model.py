@@ -152,6 +152,7 @@ class MelNetTier(nn.Module):
         self.fc_out = nn.Linear(2 * dims, 3 * n_mixtures)
         self.n_mixtures = n_mixtures
         self.sampler = True
+        self.softmax_pi = torch.nn.Softmax(dim=-1)
         # self.dims = dims
         # Print model size
         #self.num_params()
@@ -187,7 +188,7 @@ class MelNetTier(nn.Module):
 
         #sigma = torch.exp(sigma)    # causes explosion!
         sigma = torch.exp(sigma/(self.n_mixtures*torch.norm(sigma,dim=-1).unsqueeze(-1))) # scale by n_mixtures (???) at least it further reduces explosion problem
-        pi = torch.softmax(pi, dim=-1)
+        pi = self.softmax_pi(pi)
 
         #assert not torch.any(torch.isinf(sigma))
         #assert not torch.any(torch.isinf(pi))
@@ -241,6 +242,7 @@ class MelNet(nn.Module):
         # Print model size
         self.directions = tr_config.directions
         self.num_mels = data_config.num_mels
+        self.dims = tr_config.dims
         self.mel_extractor = torchaudio.transforms.MelSpectrogram(
             sample_rate=data_config.sr,
             n_fft=data_config.stft_win_sz,
@@ -251,12 +253,12 @@ class MelNet(nn.Module):
 
     def save(self, epoch, loss, path="model_checkpoints"):
         torch.save({"epoch": epoch, "model_state": self.state_dict(), "loss": loss},
-                   f"{path}/{self.layer_sizes}-{self.num_mels}-{epoch}-{loss}.model")
+                   f"{path}/{self.layer_sizes}-{self.num_mels}-{self.dims}-{epoch}-{loss}.model")
 
     def load(self, path):
-        ckpt = torch.load(path)
-        self.load_state_dict(ckpt["model_state"])
-        return ckpt["epoch"]
+        model_ckpt = torch.load(path)
+        self.load_state_dict(model_ckpt["model_state"])
+        return model_ckpt["epoch"]
 
 
     @staticmethod
@@ -285,7 +287,9 @@ class MelNet(nn.Module):
             #print("lvl", g, x.shape)
             if g == 0:
                 #print(f"generating (tier {g}): condition() -> out({x.shape})")
-                return ckpt(chkpt_fwd(self.tiers[0]), x, self.class_embeds(cond), noise)
+                #condit_embeds = ckpt(chkpt_fwd(self.class_embeds), cond)
+                condit_embeds = self.class_embeds(cond)
+                return ckpt(chkpt_fwd(self.tiers[0]), x, condit_embeds, noise)
             else:
                 dim = self.directions[g-1]
                 x_g, x_g_prev = self.split(x, dim)

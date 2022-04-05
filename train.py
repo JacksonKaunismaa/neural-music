@@ -57,7 +57,7 @@ def train(network, tr_data, va_data, config, device, path="model_checkpoints"):
     train_loss_list = []
     valid_loss_list = []
     best_loss = np.inf
-    last_save = -np.inf
+    #last_save = -np.inf
     for epoch in range(config.epochs):
         network.train() # set to training mode
         for samples,cond in tqdm(tr_data):
@@ -79,10 +79,10 @@ def train(network, tr_data, va_data, config, device, path="model_checkpoints"):
             #print("it", i)
         del pred_params, batch_loss  # memory leak? (it actually appears to be)
         valid_loss_list.append(va_loss)
-        if va_loss < best_loss and epoch - last_save > 5: # only save max every 5 epochs
+        if va_loss < best_loss:# and epoch - last_save > 5: # only save max every 5 epochs
             print("Saving network at epoch", epoch)
             network.save(epoch, va_loss, path=path)
-            last_save = epoch
+            #last_save = epoch
             best_loss = va_loss
         print(va_loss)
 
