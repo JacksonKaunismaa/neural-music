@@ -21,10 +21,10 @@ def invert_and_save(spect, genre, config):
     plt.savefig(f"{genre}_samples/{name}.png")
 
 def test_mel_params(config):
-    audio = librosa.load("./music4.opus", offset=3, duration=config.win_sz, sr=config.sr)[0]
+    audio = librosa.load("./music2.wav", duration=config.win_sz, sr=config.sr)[0]
     s = librosa.feature.melspectrogram(audio, hop_length=config.stft_hop_sz, win_length=config.stft_win_sz, sr=config.sr, n_mels=config.num_mels)
     audio = librosa.feature.inverse.mel_to_audio(s, sr=config.sr, hop_length=config.stft_hop_sz, win_length=config.stft_win_sz)
-    soundfile.write("test4.wav",  audio, config.sr, "PCM_24")
+    soundfile.write("test2.wav",  audio, config.sr, "PCM_24")
     print(s.shape)
 
 def gen_one(genre, net, config):
@@ -55,5 +55,5 @@ if __name__ == "__main__":
     #for g in [1,1,1,1,1,1,1,1,1,1,1]:
     #    gen_one(g)
     import data
-    conf = data.DatasetConfig(num_mels=180, stft_hop_sz=800, stft_win_sz=256*8)
+    conf = data.DatasetConfig(num_mels=256, stft_hop_sz=864, stft_win_sz=256*8, win_sz=10)
     test_mel_params(conf)

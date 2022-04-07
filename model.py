@@ -251,14 +251,16 @@ class MelNet(nn.Module):
         )
         self.num_params()
 
-    def save(self, epoch, loss, path="model_checkpoints"):
-        torch.save({"epoch": epoch, "model_state": self.state_dict(), "loss": loss},
+    def save(self, epoch, loss, optim, path="model_checkpoints"):
+        torch.save({"epoch": epoch, "model_state": self.state_dict(), "loss": loss, "optim_state": optim.state_dict()},
                    f"{path}/{self.layer_sizes}-{self.num_mels}-{self.dims}-{epoch}-{loss}.model")
 
-    def load(self, path):
+    def load(self, path, optim):
         model_ckpt = torch.load(path)
         self.load_state_dict(model_ckpt["model_state"])
-        return model_ckpt["epoch"]
+        if optim:
+            optim.load_state_dict(model_ckpt["optim_state"])
+        #return model_ckpt["epoch"]  # kinda pointless
 
 
     @staticmethod
