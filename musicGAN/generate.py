@@ -1,10 +1,10 @@
-import model
+#import model
 import torch
 import glob
 import numpy as np
 import warnings
-from torch.distributions import *
-from tqdm import tqdm
+#from torch.distributions import *
+#from tqdm import tqdm
 import librosa
 import soundfile
 import librosa.display
@@ -27,17 +27,10 @@ def test_mel_params(config):
     soundfile.write("test2.wav",  audio, config.sr, "PCM_24")
     print(s.shape)
 
-def gen_one(genre, net, config):
-    desired_steps = 256
-    current = torch.zeros((1,1,net.num_mels))
-    for _ in tqdm(range(desired_steps)):
-        noise = torch.normal(mean=torch.zeros(1,1,1))
-        mu,sigma,pi = net(current, torch.tensor(genre), noise)
-        categs = Categorical(pi)
-        normals = Normal(mu, sigma)
-        mixture = MixtureSameFamily(categs, normals)
-        next_col = mixture.sample()[0,-1,:].unsqueeze(0).unsqueeze(1)
-        current = torch.cat((current, next_col), dim=1)
+def gen_one(genre, net_g, config, dev):
+    noise = torch.normal(mean=torch.zeros(1, net_g.noise_sz)).to(dev)
+    conds = torch.tensor(genre).unsqueeze(0).to(dev)
+    current = net_g(noise, conds)[0]
     invert_and_save(current, genre, config)
 
 

@@ -2,16 +2,8 @@
 
 import torch
 import torch.nn as nn
-#import torch.nn.functional as F
 import numpy as np
 import torchaudio
-#import torch.utils.checkpoint as checkpoint
-#ckpt = checkpoint.checkpoint
-
-#def chkpt_fwd(module):  # standard boilerplate code for buffer checkpointing
-#    def custom_fwd(*inputs):
-#        return module(*inputs)
-#    return custom_fwd
 
 class ResBlock(nn.Module):  # should preserve shape
     # note this is basically completely from https://github.com/seungwonpark/melgan/blob/master/model/res_stack.py
@@ -51,7 +43,6 @@ class Generator(nn.Module):
     def __init__(self, tr_conf, data_conf):
         super().__init__()
         # Takes in random noise of size (noise_sz,) output shape will be (num_mels, time_len,
-        #self.conf = tr_conf
         assert(len(tr_conf.factors) == len(tr_conf.layers_2d))
         layers2 = []
         next_sz = tr_conf.start_shape   # `factors` only matters for num_mels, the time dimension can be anything
@@ -63,7 +54,9 @@ class Generator(nn.Module):
                 nn.utils.weight_norm(nn.ConvTranspose2d(
                     prev_params[0], params[0], params[1],
                     stride=params[2], padding=(next_sz-prev_sz*fact)//2)),
+                #nn.BatchNorm2d(params[0]),
                 nn.LeakyReLU(tr_conf.leaky),
+                nn.Dropout(tr_conf.dropout),
                 ResBlock(params[0], tr_conf, 2)
             ))
         layers1 = []
@@ -73,7 +66,9 @@ class Generator(nn.Module):
                 nn.utils.weight_norm(nn.Conv1d(  # add padding to keep sequence length same
                     data_conf.num_mels, data_conf.num_mels, params[0],
                     stride=params[1], padding=(params[1]*(next_sz-1)-next_sz+params[0])//2)),
+                #nn.BatchNorm1d(data_conf.num_mels),
                 nn.LeakyReLU(tr_conf.leaky),
+                nn.Dropout(tr_conf.dropout),
                 ResBlock(data_conf.num_mels, tr_conf, 1)
             ))
         self.layers1 = nn.ModuleList(layers1)
@@ -97,18 +92,18 @@ class Generator(nn.Module):
     def forward(self, x, cond):
         embed = self.embed(cond)
         x = x * embed # elementwise multiply
-        x = self.linear(x).view(-1, *self.start_shape)
+        x = self.linear(x).view(-1, *self.start_shape).contiguous()
         x = self.lin_act(x)
         for layer in self.layers2:
             x = layer(x)
         x = x.squeeze(1)
-        for layer in self.layers1:
-            x = layer(x)
+        #for layer in self.layers1:
+        #    x = layer(x)
         return x
 
     def save(self, epoch, loss, optim, path="model_checkpoints"):
         torch.save({"epoch": epoch, "model_state": self.state_dict(), "loss": loss, "optim_state": optim.state_dict()},
-                   f"{path}/gen-{self.num_mels}-{epoch}-{loss:.2f}.model")
+                   f"{path}/gen-{self.num_mels}-{epoch}-{loss:.3f}.model")
 
     def load(self, path, optim):
         model_ckpt = torch.load(path)
@@ -131,29 +126,29 @@ class Discriminator(nn.Module):
         for i, (prev_params, params, fact) in iterator:
             prev_sz = next_sz
             next_sz = prev_sz//fact
-            #print(params, prev_params, fact)#prev_sz, next_sz)
-            act = nn.LeakyReLU(tr_conf.leaky)
-            if i == len(tr_conf.d_factors)-1:
-                act = nn.Sigmoid()
             layers2.append(nn.Sequential(
                 nn.utils.weight_norm(nn.Conv2d(
                     prev_params[0], params[0], params[1],
                     stride=params[2], padding=((next_sz-1)*params[2]+params[1]-prev_sz)//2,
                     groups=params[3])),
-                act,
+                nn.LeakyReLU(tr_conf.leaky),
             ))
         self.layers_2d = nn.ModuleList(layers2)
         # (num_mels, num_mels) here should be (num_mels, seq_len)
         self.sz = data_conf.num_mels
         self.embeds = nn.Embedding(data_conf.num_classes, self.sz*self.sz)
+        self.out_feats = tr_conf.d_layers_2d[-1][0]
+        self.linear_out = nn.Linear(self.out_feats, 1)
+        self.sigm_out = nn.Sigmoid()
         self.num_params()
 
     def forward(self, x, cond):
-        embed = self.embeds(cond).view(-1, self.sz, self.sz)
+        embed = self.embeds(cond).view(-1, self.sz, self.sz).contiguous()
         x = torch.stack((x, embed), dim=1)
         for layer in self.layers_2d:
             x = layer(x)
-        return x
+        lbl = self.sigm_out(self.linear_out(x.view(-1, self.out_feats))).contiguous()
+        return lbl
 
     def save(self, epoch, loss, optim, path="model_checkpoints"):
         torch.save({"epoch": epoch, "model_state": self.state_dict(), "loss": loss, "optim_state": optim.state_dict()},
@@ -174,13 +169,14 @@ def main():
     torch.set_default_tensor_type("torch.cuda.FloatTensor")
     import train
     import data
-    train_conf = train.TrainConfig()
+
+    train_conf = train.TrainConfig(start_filts=256, noise_sz=256)
     dataset_conf = data.DatasetConfig(num_classes=3)
     g_model = Generator(train_conf, dataset_conf)
     d_model = Discriminator(train_conf, dataset_conf)
 
-    noise_gen = torch.randn((dataset_conf.batch_sz, train_conf.noise_sz))
-    condit = torch.tensor(np.ones(dataset_conf.batch_sz), dtype=torch.int32)
+    noise_gen = torch.randn((train_conf.batch_sz, train_conf.noise_sz))
+    condit = torch.tensor(np.ones(train_conf.batch_sz), dtype=torch.int32)
     out = g_model(noise_gen, condit)
     print(out.shape)
 

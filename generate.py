@@ -15,10 +15,10 @@ def invert_and_save(spect, genre, config):
     db = librosa.power_to_db(final_spectrogram, ref=np.max)
     librosa.display.specshow(db, x_axis="time", y_axis="mel", sr=config.sr, fmax=8000)
     audio = librosa.feature.inverse.mel_to_audio(final_spectrogram, sr=config.sr, hop_length=config.stft_hop_sz, win_length=config.stft_win_sz)
-    name = len(glob.glob(f"{genre}_samples/*.wav"))+100
+    name = len(glob.glob(f"{genre.item()}_samples/*.wav"))+100
     #audio = librosa.resample(audio, SR, desired_sr)
-    soundfile.write(f"{genre}_samples/{name}.wav",  audio, config.sr, "PCM_24")
-    plt.savefig(f"{genre}_samples/{name}.png")
+    soundfile.write(f"{genre.item()}_samples/{name}.wav",  audio, config.sr, "PCM_24")
+    plt.savefig(f"{genre.item()}_samples/{name}.png")
 
 def test_mel_params(config):
     audio = librosa.load("./music4.opus", offset=3, duration=config.win_sz, sr=config.sr)[0]
@@ -27,12 +27,17 @@ def test_mel_params(config):
     soundfile.write("test4.wav",  audio, config.sr, "PCM_24")
     print(s.shape)
 
-def gen_one(genre, net, config):
+def gen_one(genre, net, config, dev):
     desired_steps = 256
-    current = torch.zeros((1,1,net.num_mels))
+    genre = torch.tensor(genre,dtype=torch.int32).unsqueeze(0).to(dev)
+    current = torch.zeros((1,2,net.num_mels)).to(dev)
+    net.eval()
     for _ in tqdm(range(desired_steps)):
-        noise = torch.normal(mean=torch.zeros(1,1,1))
-        mu,sigma,pi = net(current, torch.tensor(genre), noise)
+        noise = torch.normal(mean=torch.zeros(1,1,1)).to(dev)
+        curr_selected = current
+        if current.shape[-2] % 2:
+            curr_selected = current[:,1:,:]
+        mu,sigma,pi = net(curr_selected, genre, noise)
         categs = Categorical(pi)
         normals = Normal(mu, sigma)
         mixture = MixtureSameFamily(categs, normals)
