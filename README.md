@@ -11,6 +11,10 @@ Spectrograms are like pictures of sounds. They provide a 2-D representation of a
 
 *figure 1 - MelSpectrogram representation of audio*
 
+### cMelGAN Architecture: Generator and Discriminator 
+<img width="547" alt="Screen Shot 2022-04-14 at 10 01 55 PM" src="https://user-images.githubusercontent.com/57376402/163506067-660fdc4b-d606-4c8c-8a52-7ab92811f842.png">
+*figure 2 - cMelGAN Architecture*
+
 ## Requirements
 - The model was trained and tested with Python 3.9.7 PyTorch 1.10.2.
 
