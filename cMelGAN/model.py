@@ -34,7 +34,6 @@ class ResBlock(nn.Module):  # should preserve shape
 
     def forward(self, x):
         for block, shortcut in zip(self.blocks, self.shortcuts):
-            #print("Res:", x.shape)
             x = shortcut(x) + block(x)
         return x
 
@@ -42,7 +41,6 @@ class ResBlock(nn.Module):  # should preserve shape
 class Generator(nn.Module):
     def __init__(self, tr_conf, data_conf):
         super().__init__()
-        # Takes in random noise of size (noise_sz,) output shape will be (num_mels, time_len,
         assert(len(tr_conf.factors) == len(tr_conf.layers_2d))
         layers2 = []
         next_sz = tr_conf.start_shape   # `factors` only matters for num_mels, the time dimension can be anything
@@ -54,7 +52,6 @@ class Generator(nn.Module):
                 nn.utils.weight_norm(nn.ConvTranspose2d(
                     prev_params[0], params[0], params[1],
                     stride=params[2], padding=(next_sz-prev_sz*fact)//2)),
-                #nn.BatchNorm2d(params[0]),
                 nn.LeakyReLU(tr_conf.leaky),
                 nn.Dropout(tr_conf.dropout),
                 ResBlock(params[0], tr_conf, 2)
@@ -66,7 +63,6 @@ class Generator(nn.Module):
                 nn.utils.weight_norm(nn.Conv1d(  # add padding to keep sequence length same
                     data_conf.num_mels, data_conf.num_mels, params[0],
                     stride=params[1], padding=(params[1]*(next_sz-1)-next_sz+params[0])//2)),
-                #nn.BatchNorm1d(data_conf.num_mels),
                 nn.LeakyReLU(tr_conf.leaky),
                 nn.Dropout(tr_conf.dropout),
                 ResBlock(data_conf.num_mels, tr_conf, 1)
@@ -97,8 +93,6 @@ class Generator(nn.Module):
         for layer in self.layers2:
             x = layer(x)
         x = x.squeeze(1)
-        #for layer in self.layers1:
-        #    x = layer(x)
         return x
 
     def save(self, epoch, loss, optim, path="model_checkpoints"):
@@ -164,52 +158,4 @@ class Discriminator(nn.Module):
         parameters = filter(lambda p: p.requires_grad, self.parameters())
         parameters = sum([np.prod(p.size()) for p in parameters]) / 1_000_000
         print('Discriminator Parameters: %.3fM' % parameters)
-
-def main():
-    torch.set_default_tensor_type("torch.cuda.FloatTensor")
-    import train
-    import data
-
-    train_conf = train.TrainConfig(start_filts=256, noise_sz=256)
-    dataset_conf = data.DatasetConfig(num_classes=3)
-    g_model = Generator(train_conf, dataset_conf)
-    d_model = Discriminator(train_conf, dataset_conf)
-
-    noise_gen = torch.randn((train_conf.batch_sz, train_conf.noise_sz))
-    condit = torch.tensor(np.ones(train_conf.batch_sz), dtype=torch.int32)
-    out = g_model(noise_gen, condit)
-    print(out.shape)
-
-    out = d_model(out, condit)
-    print(out.shape)
-    #batchsize = 2
-    #timesteps = 50
-    #num_mels = 64
-    #dims = 64
-
-    ##def __init__(self, dims, layer_sizes, num_classes, n_mixtures=10):
-    ##model = MelNet(dims, [4,3,2,2], 2, num_mels, timesteps, [2,1]) # split on freq (highest tier), split on time(mid tier)
-
-    #x = torch.ones(batchsize, timesteps, num_mels)
-    #z = torch.ones((1), dtype=torch.int64)
-
-    ##x1,x2 = MelNet.split(x,1)
-    ##x3,x4 = MelNet.split(x,2)
-    ##print(x1.shape, x3.shape)
-    ##x_freq = MelNet.interleave(x3,x4,2)
-    ##x_time = MelNet.interleave(x1,x2,1)
-    ##print(x_freq.shape, x_time.shape)
-    ##print((x-x_freq).sum(), (x-x_time).sum())
-
-    #print("Input Shape:", x.shape)
-    #noise = torch.normal(mean=torch.zeros(batchsize,1,1))
-    #y = model(x, z, noise)
-    #print("Mu shape", y[0].shape, "Sigma shape", y[1].shape, "Pi shape", y[2].shape)
-    #y = model(x, z, noise)
-    #print(y)
-    #print("Mu shape", y[0].shape, "Sigma shape", y[1].shape, "Pi shape", y[2].shape)
-    ##print("Output Shape", y.shape)
-
-if __name__ == "__main__":
-    main()
 

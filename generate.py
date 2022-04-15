@@ -16,7 +16,6 @@ def invert_and_save(spect, genre, config):
     librosa.display.specshow(db, x_axis="time", y_axis="mel", sr=config.sr, fmax=8000)
     audio = librosa.feature.inverse.mel_to_audio(final_spectrogram, sr=config.sr, hop_length=config.stft_hop_sz, win_length=config.stft_win_sz)
     name = len(glob.glob(f"{genre.item()}_samples/*.wav"))+100
-    #audio = librosa.resample(audio, SR, desired_sr)
     soundfile.write(f"{genre.item()}_samples/{name}.wav",  audio, config.sr, "PCM_24")
     plt.savefig(f"{genre.item()}_samples/{name}.png")
 
@@ -44,21 +43,3 @@ def gen_one(genre, net, config, dev):
         next_col = mixture.sample()[0,-1,:].unsqueeze(0).unsqueeze(1)
         current = torch.cat((current, next_col), dim=1)
     invert_and_save(current, genre, config)
-
-
-if __name__ == "__main__":
-    torch.set_default_tensor_type("torch.cuda.FloatTensor")
-    warnings.filterwarnings("ignore", category=UserWarning, module="librosa")
-    #network = model.MelNet(DIMS, N_LAYERS, 2, NUM_MELS, DIRECTIONS)
-    #try:
-    #    path = "model_checkpoints/422-128-30-67.23719781637192.model" #glob.glob("model_checkpoints/*.model")[-1]
-    #    print("loading", path)
-    #    network.load(path)
-    #except IndexError:
-    #    print("Must train a model first")
-    #    raise
-    #for g in [1,1,1,1,1,1,1,1,1,1,1]:
-    #    gen_one(g)
-    import data
-    conf = data.DatasetConfig(num_mels=180, stft_hop_sz=800, stft_win_sz=256*8)
-    test_mel_params(conf)

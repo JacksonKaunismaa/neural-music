@@ -1,18 +1,7 @@
-#import model
-#import data
 from tqdm import tqdm
 import torch
-#import torch.nn as nn
-#import matplotlib
-#import glob
 import matplotlib.pyplot as plt
 import numpy as np
-#import pandas as pd
-#import numpy.random as npr
-#from torch.autograd import Variable
-##from torch.utils.data import DataLoader
-#from torch import autograd
-#import pylab
 
 class TrainConfig:
     # Model hyperparameters
@@ -27,8 +16,6 @@ class TrainConfig:
     def __init__(self, **kwargs):
         for k,v in kwargs.items():
             setattr(self, k, v)
-
-
 
 def gaussian_pdf(x, mu, sigmasq):
     # adapted from https://mikedusenberry.com/mixture-density-networks
@@ -56,23 +43,16 @@ def train(network, optimizer, tr_data, va_data, config, device, path="model_chec
     train_loss_list = []
     valid_loss_list = []
     best_loss = np.inf
-    #last_save = -np.inf
     for epoch in range(config.epochs):
         network.train() # set to training mode
         for samples,cond in tqdm(tr_data):
             x,y,noise = preprocess(network, samples, device)
-            #print(x.shape)
             pred_params = network(x.requires_grad_(), cond.to(device), noise)
             batch_loss = loss_fn(*pred_params, y)
-            #print("COMPUTED THE LOSS")
             batch_loss.backward()
-            #print("JUST RAN BACK")
             optimizer.step()
-            #print("JUST RAN STEP")
             optimizer.zero_grad()
-            #print("JUST RAN ZERO_GRAD")
             train_loss_list.append(float(batch_loss.item()))
-            #return
         va_loss = 0
         network.eval()  # set to evaluation mode
         for i, (samples,cond) in enumerate(va_data):
@@ -80,13 +60,11 @@ def train(network, optimizer, tr_data, va_data, config, device, path="model_chec
             pred_params = network(x, cond.to(device), noise)
             batch_loss = loss_fn(*pred_params, y)
             va_loss += float(batch_loss.item())
-            #print("it", i)
         del pred_params, batch_loss  # memory leak? (it actually appears to be)
         valid_loss_list.append(va_loss)
         if va_loss < best_loss:# and epoch - last_save > 5: # only save max every 5 epochs
             print("Saving network at epoch", epoch)
             network.save(epoch, va_loss, optimizer, path=path)
-            #last_save = epoch
             best_loss = va_loss
         print(va_loss)
 

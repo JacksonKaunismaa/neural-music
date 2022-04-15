@@ -8,7 +8,6 @@ import torch.nn.functional as F
 import numpy as np
 import torchaudio
 import torch.utils.checkpoint as checkpoint
-#from torch.utils import checkpoint
 ckpt = checkpoint.checkpoint
 
 def chkpt_fwd(module):  # standard boilerplate code for buffer checkpointing
@@ -99,39 +98,16 @@ class FeatureExtraction(nn.Module):
     def __init__(self, num_mels, n_layers):
         super().__init__()
         # Input layers
-        #self.freq_fwd = nn.GRU(time_steps, time_steps, batch_first=True)
-        #self.freq_back = nn.GRU(time_steps, time_steps, batch_first=True)
         self.time_fwd = nn.GRU(num_mels, num_mels, batch_first=True)
         self.time_back = nn.GRU(num_mels, num_mels, batch_first=True)
         self.weights = nn.Linear(2,1)
-        #self.num_params()
 
     def forward(self, spectrogram):
         # Shift the inputs left for time-delay inputs
-        # spectrogram: (batch_size, time, freq)
-        #print("spec", spectrogram.shape)
-        #N,T,F = spectrogram.size()
-        #freq_input = spectrogram.transpose(1, 2).contiguous()
-        #print("the fatuers extracting from", type(spectrogram), len(spectrogram))
         time_fwd_feats, _ = self.time_fwd(spectrogram)
         time_back_feats, _ = self.time_back(spectrogram.flip(1))
-        #freq_fwd_feats, _ = self.freq_fwd(freq_input)
-        #freq_back_feats, _ = self.freq_back(freq_input.flip(2))
-
-        #freq_features = freq_features.transpose(1,2).contiguous().view(-1, T, 2*F)
         stacked = torch.stack((time_fwd_feats, time_back_feats), dim=-1)#, freq_fwd_feats.transpose(1,2), freq_back_feats.transpose(1,2)), dim=-1)  # completely made up btw
-        #assert not torch.any(torch.isinf(spectrogram))
-        #print(spectrogram.max())
-        #assert not torch.any(torch.isinf(time_fwd_feats))
-        #assert not torch.any(torch.isinf(stacked))
-        #assert not torch.any(torch.isinf(self.weights(stacked)))
         return self.weights(stacked).squeeze(-1)
-
-    def num_params(self):
-        parameters = filter(lambda p: p.requires_grad, self.parameters())
-        parameters = sum([np.prod(p.size()) for p in parameters]) / 1_000_000
-        print('Trainable Parametersextrac: %.3fM' % parameters)
-
 
 class MelNetTier(nn.Module):
     def __init__(self, dims, n_layers, n_mixtures=10):
@@ -153,9 +129,6 @@ class MelNetTier(nn.Module):
         self.n_mixtures = n_mixtures
         self.sampler = True
         self.softmax_pi = torch.nn.Softmax(dim=-1)
-        # self.dims = dims
-        # Print model size
-        #self.num_params()
 
     def forward(self, x, cond, noise, sample=True):
         if sample and self.sampler:
@@ -168,12 +141,10 @@ class MelNetTier(nn.Module):
         cond = cond.unsqueeze(-1) # add dimension of 1 to be able to do the linear layer
 
         # Initial transform from 1 to dims
-        #print("x_time, cond, time_input(x_time)", x_time.shape, cond.shape, self.time_input(x_time).shape)#, self.time_cond(cond).shape)
         if cond.shape[2] == 1:  # lowest tier, genre embeddings (probably bad way to check)
             shaped_cond = torch.reshape(cond, (-1, 1, 1, cond.shape[-2]))
             x_time = self.time_input(x_time) + shaped_cond  #cond#self.time_cond(cond)
             x_freq = self.freq_input(x_freq) + shaped_cond  #self.freq_cond(cond)
-            #print("aaxaoea")
         else:
             x_time = self.time_input(x_time) + self.time_cond(cond)
             x_freq = self.freq_input(x_freq) + self.freq_cond(cond)
@@ -189,33 +160,13 @@ class MelNetTier(nn.Module):
         #sigma = torch.exp(sigma)    # causes explosion!
         sigma = torch.exp(sigma/(self.n_mixtures*torch.norm(sigma,dim=-1).unsqueeze(-1))) # scale by n_mixtures (???) at least it further reduces explosion problem
         pi = self.softmax_pi(pi)
-
-        #assert not torch.any(torch.isinf(sigma))
-        #assert not torch.any(torch.isinf(pi))
-        #assert not torch.any(torch.isinf(mu))
         return mu, sigma, pi
 
     def forward_sample(self, x, cond, noise):
         mu, sigma, pi = self.forward(x, cond, noise, sample=False)
-        # mixture = torch.argmax(pi, dim=-1).unsqueeze(-1)  # max sampling probably bad because gradients are 0 -- it caused nans :(
-        #print(mu.shape, sigma.shape, pi.shape, mixture.shape)
-        #print(torch.take_along_dim(mu,mixture,dim=-1).shape)
-        #print(sigma[mixture].shape, noise.shape)
-
         mu_weighted = (mu*pi).sum(axis=-1)    # probably totally unjustified
         sigma_weighted = (sigma*pi).sum(axis=-1)
-        #mu_select = torch.take_along_dim(mu,mixture,dim=-1).squeeze()
-        #sigma_select = torch.take_along_dim(sigma,mixture,dim=-1).squeeze()
-        #assert not torch.any(torch.isinf(sigma_weighted))
-        #assert not torch.any(torch.isinf(mu_weighted))
-        #result = mu_weighted + sigma_weighted*noise
-        #assert not torch.any(torch.isinf(result))
         return mu_weighted + sigma_weighted*noise
-
-    def num_params(self):
-        parameters = filter(lambda p: p.requires_grad, self.parameters())
-        parameters = sum([np.prod(p.size()) for p in parameters]) / 1_000_000
-        print('Trainable Parameters Tuer: %.3fM' % parameters)
 
 class MelNet(nn.Module):
     def __init__(self, tr_config, data_config, feature_layers=1, n_mixtures=10):
@@ -235,11 +186,7 @@ class MelNet(nn.Module):
             if d == 2:
                 M //= 2
             feature_tiers.append(FeatureExtraction(M,feature_layers))
-        #print(self.feature_tier)
         self.feature_tier = nn.ModuleList(feature_tiers[::-1])
-        #print(self.feature_tier)
-        #   def __init__(self, num_mels, time_steps, n_layers, n_mixtures=10):
-        # Print model size
         self.directions = tr_config.directions
         self.num_mels = data_config.num_mels
         self.dims = tr_config.dims
@@ -283,36 +230,18 @@ class MelNet(nn.Module):
         return interleaved
 
     def forward(self, x, cond, noise):
-        #assert(not torch.any(torch.isinf(x)))
-        #assert(not torch.any(torch.isinf(cond)))
         def multi_scale(x, g):
-            #print("lvl", g, x.shape)
             if g == 0:
-                #print(f"generating (tier {g}): condition() -> out({x.shape})")
-                #condit_embeds = ckpt(chkpt_fwd(self.class_embeds), cond)
                 condit_embeds = self.class_embeds(cond)
                 return ckpt(chkpt_fwd(self.tiers[0]), x, condit_embeds, noise)
             else:
                 dim = self.directions[g-1]
                 x_g, x_g_prev = self.split(x, dim)
-                #print("on lvl", g, x_g.shape, x_g_prev.shape)
                 x_pred_prev = multi_scale(x_g_prev, g-1)
-                #print("on lvl", g, type(x_pred_prev), len(x_pred_prev))
-                #print("on lvl", g, x_pred_prev.shape)
-                #assert not torch.any(torch.isinf(x_pred_prev))
-                #print("x_pred_prev", x_pred_prev.shape)
-                #if g == self.g_mid:
                 prev_features = self.feature_tier[g-1](x_pred_prev)
                 x_pred = ckpt(chkpt_fwd(self.tiers[g]), x_g, prev_features, noise)
-                #x_pred = self.tiers[g](x_g, prev_features, noise)
-                #else:
-                #    prev_features = checkpoint.checkpoint(self.chkpt_fwd(self.feature_tier[g-1]), x_pred_prev)
-                #    x_pred = checkpoint.checkpoint(self.chkpt_fwd(self.tiers[g]), x_g, prev_features, noise)
                 return self.interleave(x_pred, x_pred_prev, dim)
         prev_context = multi_scale(x, len(self.tiers)-2)
-        #print("received final context", prev_context.shape)
-        #assert(not torch.any(torch.isinf(prev_context)))
-        #prev_features = checkpoint.checkpoint(self.chkpt_fwd(self.feature_tier[-1]), prev_context)
         prev_features = self.feature_tier[-1](prev_context)
         final_distrib = ckpt(chkpt_fwd(self.tiers[-1]), x, prev_features, noise)
         return final_distrib
@@ -321,37 +250,3 @@ class MelNet(nn.Module):
         parameters = filter(lambda p: p.requires_grad, self.parameters())
         parameters = sum([np.prod(p.size()) for p in parameters]) / 1_000_000
         print('Trainable Parameters: %.3fM' % parameters)
-
-def main():
-    torch.set_default_tensor_type("torch.cuda.FloatTensor")
-    batchsize = 2
-    timesteps = 50
-    num_mels = 64
-    dims = 64
-
-    #def __init__(self, dims, layer_sizes, num_classes, n_mixtures=10):
-    model = MelNet(dims, [4,3,2,2], 2, num_mels, timesteps, [2,1]) # split on freq (highest tier), split on time(mid tier)
-
-    x = torch.ones(batchsize, timesteps, num_mels)
-    z = torch.ones((1), dtype=torch.int64)
-
-    #x1,x2 = MelNet.split(x,1)
-    #x3,x4 = MelNet.split(x,2)
-    #print(x1.shape, x3.shape)
-    #x_freq = MelNet.interleave(x3,x4,2)
-    #x_time = MelNet.interleave(x1,x2,1)
-    #print(x_freq.shape, x_time.shape)
-    #print((x-x_freq).sum(), (x-x_time).sum())
-
-    print("Input Shape:", x.shape)
-    noise = torch.normal(mean=torch.zeros(batchsize,1,1))
-    y = model(x, z, noise)
-    print("Mu shape", y[0].shape, "Sigma shape", y[1].shape, "Pi shape", y[2].shape)
-    y = model(x, z, noise)
-    print(y)
-    print("Mu shape", y[0].shape, "Sigma shape", y[1].shape, "Pi shape", y[2].shape)
-    #print("Output Shape", y.shape)
-
-if __name__ == "__main__":
-    main()
-

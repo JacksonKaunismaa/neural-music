@@ -1,16 +1,7 @@
-#import model
-#import data
 from tqdm import tqdm
 import torch
-#import torch.nn as nn
-#import matplotlib
-#import glob
 import matplotlib.pyplot as plt
 import numpy as np
-#import pandas as pd
-#import numpy.random as npr
-#from torch.autograd import Variable
-##from torch.utils.data import DataLoader#import pylab
 
 class TrainConfig:
     # Model hyperparameters
