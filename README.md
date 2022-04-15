@@ -1,3 +1,4 @@
+#   cMelGAN
 # Music generation using MelSpectrogram
 ### A PyTorch implementation of MelNet https://arxiv.org/pdf/1906.01083.pdf
 
