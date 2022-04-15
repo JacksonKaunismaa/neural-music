@@ -29,7 +29,7 @@ Spectrograms are like pictures of sounds. They provide a 2-D representation of a
 - run `generate.py` to get some results
 
 ## A detailed anlysis of MelNet and our implementations 
-- link to paper
+- https://docs.google.com/document/d/14o8Ev-7FRwtM0n0ktcgN5dtIWJ9yHXyRuyHydURNmeI/edit?usp=sharing
 
 ## Next Step
 -  Try to fix some memory issues to the best we can
