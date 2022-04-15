@@ -1,8 +1,9 @@
 #   cMelGAN
-# Music generation using MelSpectrogram
-### A PyTorch implementation of MelNet https://arxiv.org/pdf/1906.01083.pdf
+## conditional generative model based on MelSpectrograms, a faster model for limited hardware computing resources
 
-### Last Updated: Mar.13.2021
+### First part of the code : A PyTorch implementation of MelNet https://arxiv.org/pdf/1906.01083.pdf
+
+### Last Updated: Apr.13.2022
 
 Spectrograms are like pictures of sounds. They provide a 2-D representation of audio by taking the Fourier transform of the waveform at regular intervals. These intervals, each of which generates a column of the image (Figure 1), represent a far greater time difference compared to the time difference associated with adjacent elements in a waveform representation.
 
