@@ -32,7 +32,7 @@ Spectrograms are like pictures of sounds. They provide a 2-D representation of a
 - https://docs.google.com/document/d/14o8Ev-7FRwtM0n0ktcgN5dtIWJ9yHXyRuyHydURNmeI/edit?usp=sharing
 
 ## Next Step
--  Try to fix some memory issues to the best we can
--  Look into implementing models like MelGAN, VocGAN, MelGlow, or ParallelWaveGAN, many of which are based off of MelNet
+-  Try to fix some memory issues to the best we can.
+-  Train the network with better hardware resources.
 ## License 
 MIT License
